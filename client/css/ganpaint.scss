@@ -1,0 +1,313 @@
+@import "../fonts/ssp.css";
+
+body {
+  background-color: #666666;
+  font-family: 'Source Sans Pro', sans-serif;
+  font-weight: 300;
+  font-size: 12pt;
+}
+
+a {
+  color: #8dbfff;
+  text-decoration: none;
+}
+
+button {
+  padding: 5px;
+  border-radius: 3px;
+  box-shadow: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  border: 0;
+}
+
+.divbtn {
+  display: inline-block;
+  background: #999999;
+  padding: 3px 5px;
+  margin: 0;
+  font-size: 10pt;
+
+  cursor: pointer;
+  font-weight: 400;
+
+  &:hover {
+    background: #414141;
+  }
+
+  &.selected {
+    background: black;
+  }
+}
+
+.btn_center {
+  border-radius: 0;
+}
+
+.btn_left {
+  border-radius: 3px 0 0 3px;
+}
+
+.btn_right {
+  border-radius: 0 3px 3px 0;
+}
+
+
+input {
+  font-size: 9pt;
+  font-weight: 600;
+  margin-top: 3px;
+  display: inline-block;
+  border: 1px solid #ccc;
+  //box-shadow: inset 0 1px 3px #ddd;
+  border-radius: 4px;
+  -webkit-box-sizing: border-box;
+  -moz-box-sizing: border-box;
+  box-sizing: border-box;
+  padding: 4px 6px;
+}
+
+input[type="number"] {
+  width: 50px;
+  //@extend %inputs
+
+}
+
+select {
+  font-size: 9pt;
+  font-weight: 600;
+
+  //background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10px' height='10px'><polyline points='0,0 10,0 5,10'/></svg>");
+  background-color: transparent;
+  //background-repeat: no-repeat;
+  //background-position: right 5px top 9px;
+  //background-size: 7px 7px;
+  //padding: 5px 15px 5px 5px;
+  padding: 8px 6px;
+  //width: auto;
+  //font-size:16px;
+  //font-weight: bold;
+  //text-align:center;
+  //text-shadow:0 -1px 0 rgba(0, 0, 0, 0.25);
+  -webkit-box-sizing: border-box;
+  -moz-box-sizing: border-box;
+  box-sizing: border-box;
+  border-radius: 4px;
+  border: 0;
+  outline: 0;
+  color: inherit;
+}
+
+.slider {
+  -webkit-appearance: none;
+  width: 100px;
+  height: 10px;
+  border-radius: 5px;
+  background: #d3d3d3;
+  outline: none;
+  opacity: 0.7;
+  -webkit-transition: .2s;
+  transition: opacity .2s;
+}
+
+.slider:hover {
+  opacity: 1;
+}
+
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: #666666;
+  cursor: pointer;
+}
+
+//.slider::-moz-range-thumb {
+//    width: 15px;
+//    height: 15px;
+//    border-radius: 50%;
+//    background: #666666;
+//    cursor: pointer;
+//}
+
+
+.navbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 40px;
+  background-color: #A83738;
+  color: whitesmoke;
+  //padding: 10px 10px 10px 30px;
+
+}
+
+.navbarContent {
+  margin: 10px 20px;
+
+  span {
+    padding-left: 10px;
+  }
+
+  button {
+    margin-left: 10px;
+  }
+}
+
+.navbarTitle {
+  font-size: 12pt;
+  //margin: 5pt;
+  font-weight: bold;
+}
+
+.main_frame {
+  position: fixed;
+  top: 45px;
+  left: 0;
+  //background: #ffffff;
+  overflow-x: hidden;
+  overflow-y: auto;
+  color: whitesmoke;
+
+}
+
+.floating_content {
+  padding: 10px;
+}
+
+
+.intro_text {
+  padding: 5px 0;
+}
+
+
+.historyWrap {
+  //display: inline-block;
+  //vertical-align: top;
+  height: 250px;
+  overflow-y: auto;
+}
+
+.history_entry {
+  padding: 3pt;
+
+  button {
+    background: none;
+    color: whitesmoke;
+
+    &:hover {
+      background: #701c1e;
+    }
+  }
+
+  img {
+    border: 1px dotted whitesmoke;
+    vertical-align: middle;
+  }
+
+  span {
+    color: whitesmoke;
+    padding-left: 3pt;
+  }
+
+
+}
+
+.short {
+  padding: 1pt;
+
+  button {
+    background: none;
+    color: whitesmoke;
+    padding: 2pt;
+    font-family: inherit;
+    font-size: 10pt;
+    font-weight: 400;
+
+    &:hover {
+      background: #414141;
+    }
+
+    &.selected {
+      background: #2e1112;
+      //border: 2px ;
+    }
+  }
+}
+
+.image_list {
+  img {
+    height: 45px;
+    margin: 5px 3px;
+    border-radius: 10px;
+    border: #66666600 2px solid;
+
+    &:hover {
+      border: whitesmoke 2px solid;
+    }
+  }
+}
+
+
+.GanPaintView {
+  border: 3px whitesmoke solid;
+  display: flex;
+}
+
+
+.container {
+  padding-right: 15px;
+  padding-left: 15px;
+  margin-right: auto;
+  margin-left: auto;
+}
+
+@media (min-width: 768px) {
+  .container {
+    width: 750px;
+  }
+}
+
+@media (max-width: 500px) {
+  .container {
+    padding: 0;
+    margin: 0;
+    //background: whitesmoke;
+  }
+
+  .floating_content {
+    padding: 5px 2px;
+  }
+  .GanPaintView {
+    border: none;
+  }
+
+  .no_small{
+    display: none;
+  }
+
+  //.navbar {
+  //  display: none;
+  //}
+  //
+  //.main_frame {
+  //  top: 3px;
+  //}
+
+}
+
+//@media (min-width: 992px) {
+//  .container {
+//    width: 970px;
+//  }
+//}
+//
+//@media (min-width: 1200px) {
+//  .container {
+//    width: 1170px;
+//  }
+//}

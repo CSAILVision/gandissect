@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>GAN client</title>
+
+    <link rel="stylesheet" type="text/css" href="ganclient.css">
+    <!--<link rel="stylesheet" type="text/css" href="vendor.css">-->
+</head>
+<body>
+
+<div class="navbar">
+    <div class="navbarContent">
+        <span class="navbarTitle">  </span>
+        <span>project:</span>
+        <select class="custom-select" id="project_selector">
+            <option selected>Select Project</option>
+            <!--<option value="1">One</option>-->
+            <!--<option value="2">Two</option>-->
+            <!--<option value="3">Three</option>-->
+        </select>
+        <span>layer:</span>
+        <select class="custom-select" id="layer_selector">
+            <!--<option value="0">0</option>-->
+
+        </select>
+        <button id="sidebar_btn" class="onoffswitch on"
+                style="right:5px;position: absolute;padding: 5px;">units
+        </button>
+        <i class="fas fa-eye" style="color: white"></i>
+        <!--<span>images:</span>-->
+        <label for='image_select' style="padding-right: 5px;">images:</label>
+        <input id='image_select' type="text" value="42" style="width: 200px;">
+        <!--<span>tgt:</span>-->
+        <!--<input id='target_select' type="number" value="0">-->
+        <!--<button id="do_btn" class="btn">query</button>-->
+
+        <label for="input_zoom">zoom:</label>
+        <input type="number" id="input_zoom" step=".1" value="1.2">
+
+        <label for="input_opacity">opacity:</label>
+        <input type="range" id="input_opacity" class='slider'
+               value=".3" min="0" max=".5" step=".05">
+
+        <!--<span>ablate first:</span>-->
+        <!--<input id='noAb' type="number" value="20">-->
+
+
+    </div>
+</div>
+
+
+<div class="main_frame" style="top:50px;left:0">
+    <div class="floating_content">
+
+        <div id="image_list">
+
+        </div>
+
+        <!--<img src="" id="orig_img">-->
+        <!--<img src="" id="adv_img">-->
+        <!--<svg id="projector_plane" width="500" height="500"></svg>-->
+        <!--<div class="ablation_modifier"></div>-->
+        <!--<div class="ablation_examples" style="margin-top: 10px;">-->
+
+
+        <!--</div>-->
+
+        <!--<button id="reset_mask_btn" style="display: block;">reset mask</button>-->
+        <!--<div id="paint_image"-->
+        <!--style="position: relative; display: inline-block;">-->
+
+        <!--</div>-->
+        <!--<div id="compare_img" style="display: inline-block;">-->
+
+        <!--</div>-->
+
+        <!--<button id="unitAbBtn" style="display: block;">generate unit ablations</button>-->
+        <!--<div id="unitAb">-->
+
+        <!--</div>-->
+
+
+        <!--<button id="unitSingleAbBtn">single ablation per unit</button>-->
+        <!--<input id="unitSingleAbNgram" type="number" value="1" min="1">-->
+        <!--<div id="unitSingleAb">-->
+
+        <!--</div>-->
+
+
+        <pre id="raw_code"></pre>
+
+
+    </div>
+
+</div>
+
+
+<div class="side_bar">
+
+
+    <!--<span style="padding-top: 10px;">Sort Units:</span>-->
+
+
+    <div>
+
+
+        <!--&#10004;-->
+        <label for="rm_unit">ablate first: </label>
+        <input type="number" id="rm_unit"
+               style="background-color: black; color: white;"
+               value="40"
+        >
+
+        <label for="recipe_select_ablation"> units sorted by:</label>
+        <select id="recipe_select_ablation"
+                style="margin-top: 5px; color: white;">
+            <option value="abc">abc</option>
+
+        </select>
+        <span class='watch selected' id="watch_ablation">&#128064;</span>
+
+    </div>
+
+    <div>
+        <label for="cp_unit">copy first: </label>
+        <input type="number" id="cp_unit"
+               style="background-color: black; color: white;"
+               value="5">
+        <label for="recipe_select_copy"> units sorted by:</label>
+        <select id="recipe_select_copy"
+                style="margin-top: 5px; color: white;">
+            <option value="abc">--selection--</option>
+
+        </select>
+        <span class='watch' id="watch_copy">&#128064;</span>
+    </div>
+
+    <div style="padding-top: 10px;">Units:</div>
+    <!--<div>-->
+    <!--<button id="reset_all"> all orig</button>-->
+    <!--</div>-->
+    <!--<div class="detail_img">-->
+
+    <!--</div>-->
+    <div id="units"
+         style="padding: 20px 30px ;">
+
+    </div>
+
+</div>
+
+
+<script src="vendor.js"></script>
+<script src="ganclient.js"></script>
+
+</body>
+</html>
