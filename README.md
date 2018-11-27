@@ -272,10 +272,9 @@ custom `Segmenter` subclass to the constructor of `GeneratorSegRunner`.
 ## Citation
 If you use this code for your research, please cite our [paper]():
 ```
-@article{bau2018visualizing,
-  title={Visualizing and Understanding Generative Adversarial Networks },
-  author={Bau, David and Zhu, Jun-Yan and Strobelt, Hendrik and Zhou, Bolei and Tenenbaum, Joshua B. and Freeman, William T. and Torralba, Antonio},
-  journal={arXiv preprint},
+@article{bau2018gandissect,
+  title={GAN Dissection: Visualizing and Understanding Generative Adversarial Networks},
+  author={Bau, David and Zhu, Jun-Yan and Strobelt, Hendrik and Zhou Bolei and Tenenbaum, Joshua B. and Freeman, William T. and Torralba, Antonio},
+  journal={arXiv preprint arXiv:1811.10597},
   year={2018}
-}
 ```
