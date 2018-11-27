@@ -270,7 +270,7 @@ scene.  To use a different semantic segmentation, you can supply a
 custom `Segmenter` subclass to the constructor of `GeneratorSegRunner`.
 
 ## Citation
-If you use this code for your research, please cite our [paper]():
+If you use this code for your research, please cite our [paper](https://arxiv.org/pdf/1811.10597.pdf):
 ```
 @article{bau2018gandissect,
   title={GAN Dissection: Visualizing and Understanding Generative Adversarial Networks},
