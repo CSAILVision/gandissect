@@ -2,10 +2,9 @@
 
 [**Project**](https://gandissect.csail.mit.edu/) | [**Demo**](http://gandissect.res.ibm.com/ganpaint.html?project=churchoutdoor&layer=layer4) | [**Paper**](https://arxiv.org/pdf/1811.10597.pdf) | [**Video**](http://tiny.cc/gandissect) <br>
 
-[GAN Dissection](https://gandissect.csail.mit.edu/) is a way to inspect the internal representations of a generative adversarial network (GAN) to understand how internal units align with
-human-interpretable concepts. It is part of [NetDissect](https://netdissect.csail.mit.edu/).
+[GAN Dissection](https://gandissect.csail.mit.edu/) is a way to inspect the internal representations of a generative adversarial network (GAN) to understand how internal units align with human-interpretable concepts. It is part of [NetDissect](https://netdissect.csail.mit.edu/).
 
-This repo allows you to dissect a GAN model. It provides the dissection results as a static summary or as an interactive visualization.
+This repo allows you to dissect a GAN model. It provides the dissection results as a static summary or as an interactive visualization. Try our interactive [demo](http://gandissect.res.ibm.com/ganpaint.html?project=churchoutdoor&layer=layer4) to interact with GANs and draw images. 
 
 ## Overview
 
@@ -231,9 +230,7 @@ Example:
 ```
 
 The Broden dataset is oriented towards semantic objects, parts, material, colors, etc that are found in natural scene photographs.
-If you want to analyze your model with a different semantic segmentation,
-you can substitute a different segmentation dataset and supply a `segrunner`, an argument that describes how to get segmentations and RGB images
-from the dataset.  See `ClassifierSegRunner` for the details.
+If you want to analyze your model with a different semantic segmentation, you can substitute a different segmentation dataset and supply a `segrunner`, an argument that describes how to get segmentations and RGB images from the dataset.  See `ClassifierSegRunner` for the details.
 
 ### API, for generators
 
@@ -264,10 +261,7 @@ in the dataset.
             examples_per_unit=10)
 ```
 
-The `GeneratorSegRunner` defaults to a running a semantic segmentation network
-oriented towards semantic objects, parts, and materials found in natural
-scene.  To use a different semantic segmentation, you can supply a
-custom `Segmenter` subclass to the constructor of `GeneratorSegRunner`.
+The `GeneratorSegRunner` defaults to a running a semantic segmentation network oriented towards semantic objects, parts, and materials found in natural scene photographs.  To use a different semantic segmentation, you can supply a custom `Segmenter` subclass to the constructor of `GeneratorSegRunner`.
 
 ## Citation
 If you use this code for your research, please cite our [paper](https://arxiv.org/pdf/1811.10597.pdf):
