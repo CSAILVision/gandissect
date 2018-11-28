@@ -1,3 +1,4 @@
+import numbers
 import torch
 from netdissect.autoeval import autoimport_eval
 from netdissect.progress import print_progress
