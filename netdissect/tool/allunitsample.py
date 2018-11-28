@@ -3,7 +3,7 @@ A simple tool to generate sample of output of a GAN,
 subject to filtering, sorting, or intervention.
 '''
 
-import torch, numpy, os, argparse, sys, shutil, errno
+import torch, numpy, os, argparse, sys, shutil, errno, numbers
 from PIL import Image
 from torch.utils.data import TensorDataset
 from netdissect.zdataset import standard_z_sample
