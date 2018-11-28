@@ -1,1 +1,3 @@
 *.ipynb filter=clean_ipynb
+client/* linguist-vendored
+client_dist/* linguist-vendored
