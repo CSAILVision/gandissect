@@ -53,7 +53,7 @@ class TorchTypeMatchingDict(Mapping):
             return val
         example = self.examples.get(key, None)
         example_type = type(example)
-        if example is not None and type(val) !== example_type:
+        if example is not None and type(val) != example_type:
             if isinstance(example, torch.Tensor):
                 val = torch.from_numpy(val)
             else:
