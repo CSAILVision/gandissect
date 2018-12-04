@@ -16,12 +16,13 @@ class DissectionProject:
     creates image files, and translates data between plain python data
     types and the pytorch-specific tensors required by GanTester.
     '''
-    def __init__(self, config, project_dir, path_url):
+    def __init__(self, config, project_dir, path_url, public_host):
         print('config done', project_dir)
         self.use_cuda = torch.cuda.is_available()
         self.dissect = config
         self.project_dir = project_dir
         self.path_url = path_url
+        self.public_host = public_host
         self.cachedir = os.path.join(self.project_dir, 'cache')
         self.tester = GanTester(
                 config.settings, dissectdir=project_dir,
@@ -134,8 +135,15 @@ class DissectionProject:
                 Image.fromarray(img.transpose(1, 2, 0)).save(
                          os.path.join(imgdir, filename), 'jpeg',
                          quality=99, optimize=True, progressive=True)
-                imgurls.append('/%s/cache/img/uniq/%s/%s'
+                image_url_path = ('/%s/cache/img/uniq/%s/%s'
                       % (self.path_url, randdir, filename))
+                imgurls.append(image_url_path)
+                tweet_filename = 'tweet-%d.html' % (i + startind)
+                tweet_url_path = ('/%s/cache/img/uniq/%s/%s'
+                      % (self.path_url, randdir, tweet_filename))
+                with open(os.path.join(imgdir, tweet_filename), 'w') as f:
+                    f.write(twitter_card(image_url_path, tweet_url_path,
+                        self.public_host))
             return [dict(d=d) for d in imgurls]
         imgurls = [img2base64(img.transpose(1, 2, 0)) for img in imgs]
         return [dict(d=d) for d in imgurls]
@@ -489,3 +497,33 @@ def base642img(stringdata):
     stringdata = re.sub('^(?:data:)?image/\w+;base64,', '', stringdata)
     im = Image.open(BytesIO(base64.b64decode(stringdata)))
     return numpy.array(im)
+
+def twitter_card(image_path, tweet_path, public_host):
+    return '''\
+<!doctype html>
+<html>
+<head>
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Painting with GANs from MIT-IBM Watson AI Lab" />
+<meta name="twitter:description" content="This demo lets you modify a selection of meaningful GAN units for a generated image by simply painting." />
+<meta name="twitter:image" content="http://{public_host}{image_path}" />
+<meta name="twitter:url" content="http://{public_host}{tweet_path}" />
+<meta http-equiv="refresh" content="10; url=http://bit.ly/ganpaint">
+</head>
+<style>
+body {{ font: 12px Arial, sans-serif; }}
+</style>
+<body>
+<center>
+<h1>Painting with GANs from MIT-IBM Watson AI Lab</h1>
+<p>This demo lets you modify a selection of meatningful GAN units for a generated image by simply painting.</p>
+<img src="{image_path}">
+<p>Redirecting to
+<a href="http://bit.ly/ganpaint">GANPaint</a>
+</p>
+</center>
+</body>
+'''.format(
+        image_path=image_path,
+        tweet_path=tweet_path,
+        public_host=public_host)

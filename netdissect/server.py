@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import argparse, connexion, os, sys, yaml, json
+import argparse, connexion, os, sys, yaml, json, socket
 from netdissect.easydict import EasyDict
 from flask import send_from_directory, redirect
 from flask_cors import CORS
@@ -149,7 +149,8 @@ def load_projects(directory):
             projects[dh_id] = DissectionProject(
                     config=config,
                     project_dir=p_dir,
-                    path_url='data/' + os.path.relpath(p_dir, directory))
+                    path_url='data/' + os.path.relpath(p_dir, directory),
+                    public_host=args.public_host)
 
 app.add_api('server.yaml')
 
@@ -160,6 +161,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--nodebug", default=False)
 parser.add_argument("--address", default="127.0.0.1") # 0.0.0.0 for nonlocal use
 parser.add_argument("--port", default="5001")
+parser.add_argument("--public_host", default=None)
 parser.add_argument("--nocache", default=False)
 parser.add_argument("--data", type=str, default='dissect')
 parser.add_argument("--client", type=str, default='client_dist')
@@ -172,8 +174,12 @@ if __name__ == '__main__':
             sys.exit(1)
     args.data = os.path.abspath(args.data)
     args.client = os.path.abspath(args.client)
+    if args.public_host is None:
+        args.public_host = '%s:%d' % (socket.getfqdn(), int(args.port))
     app.run(port=int(args.port), debug=not args.nodebug, host=args.address,
             use_reloader=False)
 else:
     args, _ = parser.parse_known_args()
+    if args.public_host is None:
+        args.public_host = '%s:%d' % (socket.getfqdn(), int(args.port))
     load_projects(args.data)
