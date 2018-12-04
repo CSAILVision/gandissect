@@ -24,8 +24,8 @@ def autoimport_eval(term):
                     return self.wrapped[key]
             if self.parent is not None:
                 key = self.parent + '.' + key
-            if hasattr(__builtins__, key):
-                return getattr(__builtins__, key)
+            if key in __builtins__:
+                return __builtins__[key]
             mdl = import_module(key)
             # Return an AutoImportDict for any namespace packages
             if hasattr(mdl, '__path__'): # and not hasattr(mdl, '__file__'):
