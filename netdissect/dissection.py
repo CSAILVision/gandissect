@@ -1,8 +1,9 @@
 '''
 To run dissection:
 
-1. Load up the convolutional model you wish to dissect, and call
-   retain_layers(model, [layernames,..]) to instrument the model.
+1. Load up the convolutional model you wish to dissect, and wrap it in
+   an InstrumentedModel; then call imodel.retain_layers([layernames,..])
+   to instrument the layers of interest.
 2. Load the segmentation dataset using the BrodenDataset class;
    use the transform_image argument to normalize images to be
    suitable for the model, or the size argument to truncate the dataset.
@@ -11,13 +12,13 @@ To run dissection:
 
 Example:
 
-    from dissect import retain_layers, dissect
+    from dissect import InstrumentedModel, dissect
     from broden import BrodenDataset
 
-    model = load_my_model()
+    model = InstrumentedModel(load_my_model())
     model.eval()
     model.cuda()
-    retain_layers(model, ['conv1', 'conv2', 'conv3', 'conv4', 'conv5'])
+    model.retain_layers(['conv1', 'conv2', 'conv3', 'conv4', 'conv5'])
     bds = BrodenDataset('dataset/broden1_227',
             transform_image=transforms.Compose([
                 transforms.ToTensor(),
@@ -538,7 +539,7 @@ def generate_images(outdir, model, dataset, topk, levels,
         # Reverse transformation to get the image in byte form.
         seg, _, byte_im, _ = segrunner.run_and_segment_batch(batch, model,
                 want_rgb=True)
-        torch_features = model.retained
+        torch_features = model.retained_features()
         scale_offset = getattr(model, 'scale_offset', None)
         if pool is None:
             # Distribute the work across processes: create shared mmaps.
@@ -686,22 +687,23 @@ def collect_quantiles_and_topk(outdir, model, segloader,
     a map of topk (one RunningTopK for each layer).
     '''
     device = next(model.parameters()).device
+    features = model.retained_features()
     cached_quantiles = {
             layer: load_quantile_if_present(os.path.join(outdir,
                 safe_dir_name(layer)), 'quantiles.npz',
                 device=torch.device('cpu'))
-            for layer in model.retained }
+            for layer in features }
     cached_topks = {
             layer: load_topk_if_present(os.path.join(outdir,
                 safe_dir_name(layer)), 'topk.npz',
                 device=torch.device('cpu'))
-            for layer in model.retained }
+            for layer in features }
     if (all(value is not None for value in cached_quantiles.values()) and
         all(value is not None for value in cached_topks.values())):
         return cached_quantiles, cached_topks
 
     layer_batch_size = 8
-    all_layers = list(model.retained.keys())
+    all_layers = list(features.keys())
     layer_batches = [all_layers[i:i+layer_batch_size]
             for i in range(0, len(all_layers), layer_batch_size)]
 
@@ -711,7 +713,7 @@ def collect_quantiles_and_topk(outdir, model, segloader,
         for i, batch in enumerate(progress(segloader, desc='Quantiles')):
             # We don't actually care about the model output.
             model(batch[0].to(device))
-            features = model.retained
+            features = model.retained_features()
             # We care about the retained values
             for key in layer_batch:
                 value = features[key]
@@ -765,7 +767,7 @@ def collect_bincounts(outdir, model, segloader, levels, segrunner):
             total_counts, label_counts, category_activation_counts,
             intersection_counts) = {}, {}, None, None, {}, {}
     found_all = True
-    for layer in model.retained:
+    for layer in model.retained_features():
         filename = os.path.join(outdir, safe_dir_name(layer), 'bincounts.npz')
         if os.path.isfile(filename):
             data = numpy.load(filename)
@@ -813,7 +815,7 @@ def collect_bincounts(outdir, model, segloader, levels, segrunner):
         bc = batch_label_counts.cpu()
         batch_label_counts = batch_label_counts.to(device)
         seg = seg.to(device)
-        features = model.retained
+        features = model.retained_features()
         # Accumulate bincounts and identify nonzeros
         label_counts += batch_label_counts[0]
         batch_labels = bc[0].nonzero()[:,0]
@@ -886,7 +888,7 @@ def collect_cond_quantiles(outdir, model, segloader, segrunner):
     cached_cond_quantiles = {
             layer: load_conditional_quantile_if_present(os.path.join(outdir,
                 safe_dir_name(layer)), 'cond_quantiles.npz') # on cpu
-            for layer in model.retained }
+            for layer in model.retained_features() }
     label_fracs = load_npy_if_present(outdir, 'label_fracs.npy', 'cpu')
     if label_fracs is not None and all(
             value is not None for value in cached_cond_quantiles.values()):
@@ -916,7 +918,7 @@ def collect_cond_quantiles(outdir, model, segloader, segrunner):
             seg, batch_label_counts, im, _ = segrunner.run_and_segment_batch(
                     batch, model, want_bincount=True, want_rgb=True)
             batch_label_counts = batch_label_counts.to(device)
-            features = model.retained
+            features = model.retained_features()
             # Accumulate bincounts and identify nonzeros
             label_counts += batch_label_counts[0]
             pixel_count += seg.shape[2] * seg.shape[3]
@@ -927,7 +929,7 @@ def collect_cond_quantiles(outdir, model, segloader, segrunner):
     skip_labels = set(i.item()
         for i in (label_fracs.view(-1) < skip_threshold).nonzero().view(-1))
 
-    for layer in progress(model.retained.keys(), desc='CQ layers'):
+    for layer in progress(model.retained_features().keys(), desc='CQ layers'):
         if cached_cond_quantiles.get(layer, None) is not None:
             conditional_quantiles[layer] = cached_cond_quantiles[layer]
             continue
@@ -938,7 +940,7 @@ def collect_cond_quantiles(outdir, model, segloader, segrunner):
                          batch, model, want_bincount=True, want_rgb=True))
             bc = batch_label_counts.cpu()
             batch_label_counts = batch_label_counts.to(device)
-            features = model.retained
+            features = model.retained_features()
             # Accumulate bincounts and identify nonzeros
             label_counts += batch_label_counts[0]
             pixel_count += seg.shape[2] * seg.shape[3]
@@ -1038,7 +1040,7 @@ def collect_maxiou(outdir, model, segloader, segrunner):
         max_iou_level[layer] = levels[
                 torch.arange(levels.shape[0])[None,:], level_bucket]
         max_iou_quantile[layer] = fracs[level_bucket]
-    for layer in model.retained:
+    for layer in model.retained_features():
         numpy.savez(os.path.join(outdir, safe_dir_name(layer), 'max_iou.npz'),
             max_iou=max_iou[layer].cpu().numpy(),
             max_iou_level=max_iou_level[layer].cpu().numpy(),
@@ -1056,7 +1058,7 @@ def collect_iqr(outdir, model, segloader, segrunner):
     max_iqr, max_iqr_level, max_iqr_quantile, max_iqr_iou  = {}, {}, {}, {}
     max_iqr_agreement = {}
     found_all = True
-    for layer in model.retained:
+    for layer in model.retained_features():
         filename = os.path.join(outdir, safe_dir_name(layer), 'iqr.npz')
         if os.path.isfile(filename):
             data = numpy.load(filename)
@@ -1144,7 +1146,7 @@ def collect_iqr(outdir, model, segloader, segrunner):
                 level_bucket])
         matching_iou[torch.isnan(matching_iou)] = 0
         max_iqr_iou[layer] = matching_iou.cpu()
-    for layer in model.retained:
+    for layer in model.retained_features():
         numpy.savez(os.path.join(outdir, safe_dir_name(layer), 'iqr.npz'),
             max_iqr=max_iqr[layer].cpu().numpy(),
             max_iqr_level=max_iqr_level[layer].cpu().numpy(),
@@ -1199,7 +1201,7 @@ def collect_covariance(outdir, model, segloader, segrunner):
     cached_covariance = {
             layer: load_covariance_if_present(os.path.join(outdir,
                 safe_dir_name(layer)), 'covariance.npz', device=device)
-            for layer in model.retained }
+            for layer in model.retained_features() }
     if all(value is not None for value in cached_covariance.values()):
         return cached_covariance
     labelcat, categories = segrunner.get_label_and_category_names()
@@ -1215,7 +1217,7 @@ def collect_covariance(outdir, model, segloader, segrunner):
     for i, batch in enumerate(progress(segloader, desc='Covariance')):
         seg, _, _, imshape = segrunner.run_and_segment_batch(batch, model,
                 want_rgb=True)
-        features = model.retained
+        features = model.retained_features()
         ohfeats = multilabel_onehot(seg, num_labels, ignore_index=0)
         # Accumulate bincounts and identify nonzeros
         for key, value in features.items():

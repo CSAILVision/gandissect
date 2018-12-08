@@ -218,7 +218,7 @@ def compute_present_locations(args, corpus, cache_filename,
             score = torch.nn.functional.adaptive_avg_pool2d(
                     mask.float(), feature_shape)
             object_presence_scores.append(score.cpu())
-            feat = model.retained[args.layer]
+            feat = model.retained_layer(args.layer)
             weighted_feature_sum += (feat * score[:,None,:,:]).view(
                     feat.shape[0],feat.shape[1], -1).sum(2).sum(0)
         object_presence_at_feature = torch.cat(object_presence_scores)
@@ -263,7 +263,7 @@ def compute_mean_present_features(args, corpus, cache_filename, model):
             zbatch = zbatch.cuda()
             featloc = featloc.cuda()
             tensor_image = model(zbatch)
-            feat = model.retained[args.layer]
+            feat = model.retained_layer(args.layer)
             flatfeat = feat.view(feat.shape[0], feat.shape[1], -1)
             sum_feature_at_obj = flatfeat[
                     torch.arange(feat.shape[0]).to(feat.device), :, featloc
@@ -288,7 +288,7 @@ def compute_feature_quantiles(args, corpus, cache_filename, model, full_sample):
                 desc="Calculating 0.999 quantile"):
             zbatch = zbatch.cuda()
             tensor_image = model(zbatch)
-            feat = model.retained[args.layer]
+            feat = model.retained_layer(args.layer)
             rq.add(feat.permute(0, 2, 3, 1
                 ).contiguous().view(-1, feat.shape[1]))
         result = rq.quantiles([0.001, 0.01, 0.1, 0.5, 0.9, 0.99, 0.999])
@@ -356,8 +356,8 @@ def compute_candidate_locations(args, corpus, cache_filename, model,
                     p=location_weights, size=5):
                 edit_mask.zero_()
                 edit_mask.view(-1)[loc] = 1
-                model.ablation[args.layer] = edit_mask
-                model.replacement[args.layer] = replace_vec
+                model.edit_layer(args.layer,
+                        ablation=edit_mask, replacement=replace_vec)
                 tensor_image = model(zbatch)
                 segmented_image = segmenter.segment_batch(tensor_image,
                     downsample=2)
@@ -499,10 +499,9 @@ def ace_loss(segmenter, classnum, model, layer, high_replacement, ablation,
         p_mask.view(len(pbatch), -1).scatter_(1, ploc[:,None], 1)
     p_mask = p_mask.cuda()
     a_p_mask = (ablation * p_mask)
-    model.ablation[layer] = a_p_mask
-    model.replacement[layer] = None
+    model.edit_layer(layer, ablation=a_p_mask, replacement=None)
     tensor_images = model(pbatch.cuda())
-    assert model.ablation[layer] is a_p_mask
+    assert model._ablation[layer] is a_p_mask
     erase_effect, erased_mask = segmenter.predict_single_class(
             tensor_images, classnum, downsample=2)
     if discrete_pixels: # pixel loss: use mask instead of pred
@@ -525,10 +524,9 @@ def ace_loss(segmenter, classnum, model, layer, high_replacement, ablation,
     c_mask.view(len(cbatch), -1).scatter_(1, cloc[:,None], 1)
     c_mask = c_mask.cuda()
     a_c_mask = (ablation * c_mask)
-    model.ablation[layer] = a_c_mask
-    model.replacement[layer] = high_replacement
+    model.edit_layer(layer, ablation=a_c_mask, replacement=high_replacement)
     tensor_images = model(cbatch.cuda())
-    assert model.ablation[layer] is a_c_mask
+    assert model._ablation[layer] is a_c_mask
     add_effect, added_mask = segmenter.predict_single_class(
             tensor_images, classnum, downsample=2)
     if discrete_pixels: # pixel loss: use mask instead of pred
@@ -813,8 +811,8 @@ def evaluate_ablation(args, model, segmenter, eval_sample, classnum, layer,
             imask = torch.zeros((len(ibz),) + feature_shape, device=ibz.device)
             imask[(torch.arange(len(ibz)),) + tuple(ibl)] = 1
             ibc = inter_chan[j:j+batch_size]
-            model.ablation[args.layer] = (
-                    imask.float()[:,None,:,:] * ibc[:,:,None,None])
+            model.edit_layer(args.layer, ablation=(
+                    imask.float()[:,None,:,:] * ibc[:,:,None,None]))
             _, seg, _, _, _ = (
                 recovery.recover_im_seg_bc_and_features(
                     [ibz], model))

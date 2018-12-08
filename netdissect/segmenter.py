@@ -466,7 +466,7 @@ class SemanticSegmenter(BaseSegmenter):
         seg, pred = self.raw_segment_batch(tensor_images,
                 downsample=downsample)
         result = pred[:,self.channellist[classnum]].sum(dim=1)
-        mask = (seg == classnum)
+        mask = (seg == classnum).max(1)[0]
         return result, mask
 
 def component_masks(segmentation_batch):

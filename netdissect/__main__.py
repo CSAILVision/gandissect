@@ -2,7 +2,7 @@ import torch, sys, os, argparse, textwrap, numbers, numpy, json, PIL
 from torchvision import transforms
 from torch.utils.data import TensorDataset
 from netdissect.progress import verbose_progress, print_progress
-from netdissect import retain_layers, BrodenDataset, dissect
+from netdissect import InstrumentedModel, BrodenDataset, dissect
 from netdissect import MultiSegmentDataset, GeneratorSegRunner
 from netdissect.zdataset import z_dataset_for_model
 from netdissect.autoeval import autoimport_eval
@@ -251,10 +251,10 @@ def test_dissection():
     verbose_progress(True)
     from torchvision.models import alexnet
     from torchvision import transforms
-    model = alexnet(pretrained=True)
+    model = InstrumentedModel(alexnet(pretrained=True))
     model.eval()
     # Load an alexnet
-    retain_layers(model, [
+    model.retain_layers([
         ('features.0', 'conv1'),
         ('features.3', 'conv2'),
         ('features.6', 'conv3'),

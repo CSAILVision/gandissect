@@ -213,7 +213,7 @@ class GanTester:
 
         # Get the set of layers of interest.
         # Default: all shallow children except last.
-        self.layers = sorted(model.retained.keys())
+        self.layers = sorted(model.retained_features().keys())
 
         # Move it to CUDA if wanted.
         model.to(device)
@@ -239,9 +239,7 @@ class GanTester:
         return result
 
     def reset_intervention(self):
-        for layer in self.layers:
-            self.model.ablation[layer] = None
-            self.model.replacement[layer] = None
+        self.model.remove_edits()
 
     def apply_intervention(self, intervention):
         '''
@@ -251,8 +249,7 @@ class GanTester:
         if not intervention:
             return
         for layer, (a, v) in intervention.items():
-            self.model.ablation[layer] = a
-            self.model.replacement[layer] = v
+            self.model.edit_layer(layer, ablation=a, replacement=v)
 
     def generate_images(self, z_batch, intervention=None):
         '''
@@ -303,7 +300,7 @@ class GanTester:
                 # Run model but disregard output
                 self.model(batch_z)
                 processing = batch_z.shape[0]
-                for layer, feature in self.model.retained.items():
+                for layer, feature in self.model.retained_features().items():
                     if layers is not None:
                         if layer not in layers:
                             continue
@@ -362,7 +359,7 @@ class GanTester:
                 # Run model but disregard output
                 self.model(batch_z)
                 processing = batch_z.shape[0]
-                for layer, feature in self.model.retained.items():
+                for layer, feature in self.model.retained_features().items():
                     for single_featuremap in feature:
                         if quantiles:
                             feature_map[layer].append(self.quantiles[layer]
