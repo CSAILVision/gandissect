@@ -12,7 +12,7 @@ This repo allows you to dissect a GAN model. It provides the dissection results 
 
 [Visualizing and Understanding Generative Adversarial Networks](http://gandissect.csail.mit.edu) <br>
 [David Bau](http://people.csail.mit.eduÂ/davidbau/home/), [Jun-Yan Zhu](http://people.csail.mit.edu/junyanz/), [Hendrik Strobelt](http://hendrik.strobelt.com/), [Bolei Zhou](http://people.csail.mit.edu/bzhou/), [Joshua B. Tenenbaum](http://web.mit.edu/cocosci/josh.html), [William T. Freeman](https://billf.mit.edu/), [Antonio Torralba](http://web.mit.edu/torralba/www/) <br>
-MIT CSAIL, MIT-IBM Watson AI Lab, CUHK, Google, IBM Research <br>
+MIT CSAIL, MIT-IBM Watson AI Lab, CUHK, IBM Research <br>
 In arXiv, 2018.
 
 
