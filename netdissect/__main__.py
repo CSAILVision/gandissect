@@ -46,6 +46,8 @@ def main():
                         help='constructor for the model to test')
     parser.add_argument('--pthfile', type=str, default=None,
                         help='filename of .pth file for the model')
+    parser.add_argument('--submodule', type=str, default=None,
+                        help='submodule to load from pthfile')
     parser.add_argument('--outdir', type=str, default='dissect',
                         help='directory for dissection output')
     parser.add_argument('--layers', type=strpair, nargs='+',
