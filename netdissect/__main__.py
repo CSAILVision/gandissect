@@ -22,7 +22,7 @@ To dissect a progressive GAN model:
 
 python -m netdissect \\
         --model "proggan.from_pth_file('model/churchoutdoor.pth')" \\
-        --gan "netdissect.GanImageSegmenter()"
+        --gan
 '''
 
 def main():
