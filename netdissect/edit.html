@@ -316,7 +316,9 @@ activation on <span style="color:red">&#x25cf;</span> selected pixels of
       v-for="urec, ordernum in palette_units"
       :data-ordernum="ordernum"
       >
-<div v-if="'iou_label' in urec" class="unitlabel">{{urec.iou_label}}</div>
+<template v-if="sort_order.indexOf('-') < 0"
+          ><div v-if="'iou_label' in urec" class="unitlabel"
+          >{{urec.iou_label}}</div></template>
 <div class="info"
  ><span class="layername">{{urec.layer}}</span
  > <span class="unitnum">{{urec.unit}}</span>
