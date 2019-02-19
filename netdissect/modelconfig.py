@@ -59,9 +59,10 @@ def create_instrumented_model(args, **kwargs):
             data = { k[len(remove_prefix):]: v for k, v in data.items()
                     if k.startswith(remove_prefix)}
             if not len(data):
-                print_progress('No submodule %s found in %s' % (submodule, args.pthfile))
+                print_progress('No submodule %s found in %s' %
+                        (submodule, args.pthfile))
                 return None
-        model.load_state_dict(data)
+        model.load_state_dict(data, strict=not getattr(args, 'unstrict', False))
 
     # Decide which layers to instrument.
     if getattr(args, 'layer', None) is not None:
