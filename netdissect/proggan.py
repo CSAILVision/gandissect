@@ -217,6 +217,9 @@ def state_dict_from_tf_parameters(parameters):
     '''
     Conversion from tensorflow parameters
     '''
+    def torch_from_tf(data):
+        return torch.from_numpy(data.eval())
+
     params = dict(parameters)
     result = {}
     sizes = []
@@ -232,7 +235,7 @@ def state_dict_from_tf_parameters(parameters):
         pt_layername = 'layer%d' % (i + 1)
         # Stop looping when we run out of parameters.
         try:
-            weight = torch.from_numpy(params['%s/weight' % tf_layername])
+            weight = torch_from_tf(params['%s/weight' % tf_layername])
         except KeyError:
             break
         # Transpose convolution weights into pytorch format.
@@ -250,7 +253,7 @@ def state_dict_from_tf_parameters(parameters):
             sizes.append(weight.shape[1])
         result['%s.conv.weight' % (pt_layername)] = weight
         # Copy bias vector.
-        bias = torch.from_numpy(params['%s/bias' % tf_layername])
+        bias = torch_from_tf(params['%s/bias' % tf_layername])
         result['%s.wscale.b' % (pt_layername)] = bias
     # Copy just finest-grained ToRGB output layers.  For example:
     # ToRGB_lod0/weight -> output.conv.weight
@@ -258,9 +261,9 @@ def state_dict_from_tf_parameters(parameters):
     resolution = 4 * (2 ** (i // 2))
     tf_layername = 'ToRGB_lod0'
     pt_layername = 'output_%dx%d' % (resolution, resolution)
-    result['%s.conv.weight' % pt_layername] = torch.from_numpy(
+    result['%s.conv.weight' % pt_layername] = torch_from_tf(
             params['%s/weight' % tf_layername]).permute(3, 2, 0, 1)
-    result['%s.wscale.b' % pt_layername] = torch.from_numpy(
+    result['%s.wscale.b' % pt_layername] = torch_from_tf(
             params['%s/bias' % tf_layername])
     # Return parameters
     return result
