@@ -13,7 +13,7 @@ help_epilog = '''\
 Example:
 
 python -m netdissect.evalablate \
-      --segmenter "netdissect.GanImageSegmenter(segvocab='lowres', segsizes=[160,288], segdiv='quad')" \
+      --segmenter "netdissect.segmenter.UnifiedParsingSegmenter(segsizes=[256], segdiv='quad')" \
       --model "proggan.from_pth_file('models/lsun_models/${SCENE}_lsun.pth')" \
       --outdir dissect/dissectdir \
       --classes mirror coffeetable tree \
