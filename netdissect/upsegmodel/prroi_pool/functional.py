@@ -19,7 +19,7 @@ try:
     _prroi_pooling = load_extension(
         '_prroi_pooling',
         [pjoin(root_dir, 'prroi_pooling_gpu.c'), pjoin(root_dir, 'prroi_pooling_gpu_impl.cu')],
-        verbose=True
+        verbose=False
     )
 except ImportError:
     raise ImportError('Can not compile Precise RoI Pooling library.')
