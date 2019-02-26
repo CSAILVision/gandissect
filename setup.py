@@ -26,7 +26,7 @@ setuptools.setup(
     ),
     python_requires=">=3.5.2",
     install_requires=[
-        "torch>=0.4.1",
+        "torch>=1.0.0",
         "torchvision>=0.2.1",
         "connexion>=1.5",
         "pyyaml>=3.12",
