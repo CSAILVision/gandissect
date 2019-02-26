@@ -76,8 +76,7 @@ def dissect(outdir, model, dataset,
     if netname is None:
         netname = type(model).__name__
     if segrunner is None:
-        segrunner = ClassifierSegRunner(dataset,
-            reverse_normalize_from_transform(dataset))
+        segrunner = ClassifierSegRunner(dataset)
     if train_dataset is None:
         train_dataset = dataset
     make_iqr = (quantile_threshold == 'iqr')
@@ -1503,9 +1502,35 @@ class ReverseNormalize:
         device = data.device
         return data.mul(self.stdev.to(device)).add_(self.mean.to(device))
 
+class ImageOnlySegRunner:
+    def __init__(self, dataset, recover_image=None):
+        if recover_image is None:
+            recover_image = reverse_normalize_from_transform(dataset)
+        self.recover_image = recover_image
+        self.dataset = dataset
+    def get_label_and_category_names(self):
+        return [('-', '-')], ['-']
+    def run_and_segment_batch(self, batch, model,
+            want_bincount=False, want_rgb=False):
+        [im] = batch
+        device = next(model.parameters()).device
+        if want_rgb:
+            rgb = self.recover_image(im.clone()
+                ).permute(0, 2, 3, 1).mul_(255).clamp(0, 255).byte()
+        else:
+            rgb = None
+        # Stubs for seg and bc
+        seg = torch.zeros(im.shape[0], 1, 1, 1, dtype=torch.long)
+        bc = torch.ones(im.shape[0], 1, dtype=torch.long)
+        # Run the model.
+        model(im.to(device))
+        return seg, bc, rgb, im.shape[2:]
+
 class ClassifierSegRunner:
-    def __init__(self, dataset, recover_image):
+    def __init__(self, dataset, recover_image=None):
         # The dataset contains explicit segmentations
+        if recover_image is None:
+            recover_image = reverse_normalize_from_transform(dataset)
         self.recover_image = recover_image
         self.dataset = dataset
     def get_label_and_category_names(self):

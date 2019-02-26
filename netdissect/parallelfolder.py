@@ -32,15 +32,18 @@ class ParallelImageFolders(data.Dataset):
             loader=default_loader,
             stacker=None,
             intersection=False,
-            verbose=None):
+            verbose=None,
+            size=None):
         self.image_roots = image_roots
         self.images = make_parallel_dataset(image_roots,
                 intersection=intersection, verbose=verbose)
         if len(self.images) == 0:
             raise RuntimeError("Found 0 images within: %s" % image_roots)
+        if size is not None:
+            self.image = self.images[:size]
         if transform is not None and not hasattr(transform, '__iter__'):
             transform = [transform for _ in image_roots]
-        self.transform = transform
+        self.transforms = transform
         self.stacker = stacker
         self.loader = loader
 
@@ -52,9 +55,9 @@ class ParallelImageFolders(data.Dataset):
         shared_state = {}
         for s in sources:
             s.shared_state = shared_state
-        if self.transform is not None:
+        if self.transforms is not None:
             sources = [transform(source)
-                    for source, transform in zip(sources, self.transform)]
+                    for source, transform in zip(sources, self.transforms)]
         if self.stacker is not None:
             sources = self.stacker(sources)
         else:
@@ -68,7 +71,7 @@ def is_npy_file(path):
     return path.endswith('.npy') or path.endswith('.NPY')
 
 def is_image_file(path):
-    return None != re.match(r'.(jpe?g|png)$', path, re.IGNORECASE)
+    return None != re.search(r'\.(jpe?g|png)$', path, re.IGNORECASE)
 
 def walk_image_files(rootdir, verbose=None):
     progress = default_progress(verbose)

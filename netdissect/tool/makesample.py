@@ -127,7 +127,7 @@ def get_highest_znums(model, z_universe, max_units, size,
 
 
 def save_znum_images(dirname, model, z_sample, indexes, layer, ablated_units,
-        name_template="image_{}.jpg", lightbox=False, batch_size=100, seed=1):
+        name_template="image_{}.png", lightbox=False, batch_size=100, seed=1):
     progress = default_progress()
     os.makedirs(dirname, exist_ok=True)
     with torch.no_grad():

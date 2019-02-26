@@ -4,6 +4,8 @@ from torch.utils.data import TensorDataset
 from netdissect.progress import verbose_progress, print_progress
 from netdissect import InstrumentedModel, BrodenDataset, dissect
 from netdissect import MultiSegmentDataset, GeneratorSegRunner
+from netdissect import ImageOnlySegRunner
+from netdissect.parallelfolder import ParallelImageFolders
 from netdissect.zdataset import z_dataset_for_model
 from netdissect.autoeval import autoimport_eval
 from netdissect.modelconfig import create_instrumented_model
@@ -61,6 +63,8 @@ def main():
                         help='constructor for asegmenter class')
     parser.add_argument('--download', action='store_true', default=False,
                         help='downloads Broden dataset if needed')
+    parser.add_argument('--imagedir', type=str, default=None,
+                        help='directory containing image-only dataset')
     parser.add_argument('--imgsize', type=intpair, default=(227, 227),
                         help='input image size to use')
     parser.add_argument('--netname', type=str, default=None,
@@ -134,7 +138,7 @@ def main():
         sys.exit(0)
 
     # Help if broden is not present
-    if not args.gen and not os.path.isdir(args.segments):
+    if not args.gen and not args.imagedir and not os.path.isdir(args.segments):
         print_progress('Segmentation dataset not found at %s.' % args.segments)
         print_progress('Specify dataset directory using --segments [DIR]')
         print_progress('To download Broden, run: netdissect --download')
@@ -189,19 +193,24 @@ def main():
         # Load perturbation
         perturbation = numpy.load(args.perturbation
                 ) if args.perturbation else None
+        segrunner = None
 
         # Load broden dataset
-        dataset = try_to_load_broden(args.segments, args.imgsize, 1,
+        if args.imagedir is not None:
+            dataset = try_to_load_images(args.imagedir, args.imgsize,
+                    perturbation, args.size)
+            segrunner = ImageOnlySegRunner(dataset)
+        else:
+            dataset = try_to_load_broden(args.segments, args.imgsize, 1,
                 perturbation, args.download, args.size)
         if dataset is None:
-            ds = try_to_load_multiseg(args.segments, args.imgsize,
+            dataset = try_to_load_multiseg(args.segments, args.imgsize,
                     perturbation, args.size)
         if dataset is None:
             print_progress('No segmentation dataset found in %s',
                     args.segments)
             print_progress('use --download to download Broden.')
             sys.exit(1)
-        segrunner = None
     else:
         # For segmenter case the dataset is just a random z
         dataset = z_dataset_for_model(model, args.size)
@@ -273,6 +282,18 @@ def test_dissection():
     # run dissect
     dissect('dissect/test', model, bds,
             examples_per_unit=10)
+
+def try_to_load_images(directory, imgsize, perturbation, size):
+    # Load plain image dataset
+    # TODO: allow other normalizations.
+    return ParallelImageFolders(
+            [directory],
+            transform=transforms.Compose([
+                transforms.Resize(imgsize),
+                AddPerturbation(perturbation),
+                transforms.ToTensor(),
+                transforms.Normalize(IMAGE_MEAN, IMAGE_STDEV)]),
+            size=size)
 
 def try_to_load_broden(directory, imgsize, broden_version, perturbation,
         download, size):

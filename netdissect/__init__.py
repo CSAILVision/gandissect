@@ -36,6 +36,7 @@ Example:
 
 from .dissection import dissect, ReverseNormalize
 from .dissection import ClassifierSegRunner, GeneratorSegRunner
+from .dissection import ImageOnlySegRunner
 from .broden import BrodenDataset, ScaleSegmentation, scatter_batch
 from .segdata import MultiSegmentDataset
 from .nethook import InstrumentedModel
@@ -47,7 +48,7 @@ from . import sampler
 
 __all__ = [
     'dissect', 'ReverseNormalize',
-    'ClassifierSegRunner', 'GeneratorSegRunner',
+    'ClassifierSegRunner', 'GeneratorSegRunner', 'ImageOnlySegRunner',
     'BrodenDataset', 'ScaleSegmentation', 'scatter_batch',
     'MultiSegmentDataset',
     'InstrumentedModel',
