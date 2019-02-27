@@ -3,12 +3,20 @@
 
 set -e
 
+# Within MIT the dataset exists here
+LOCALDATA=/data/vision/torralba/datasets/broden
+
 # Start from parent directory of script
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 # Download broden1_224
 if [ ! -f dataset/broden1_224/index.csv ]
 then
+
+if [ -d "${LOCALDATA}/broden1_224" ]
+then
+ln -s "${LOCALDATA}/broden1_224" broden1_224
+else
 
 echo "Downloading broden1_224"
 mkdir -p dataset
@@ -21,10 +29,16 @@ rm broden1_224.zip
 popd
 
 fi
+fi
 
 # Download broden1_227
 if [ ! -f dataset/broden1_227/index.csv ]
 then
+
+if [ -d "${LOCALDATA}/broden1_227" ]
+then
+ln -s "${LOCALDATA}/broden1_227" broden1_227
+else
 
 echo "Downloading broden1_227"
 mkdir -p dataset
@@ -37,10 +51,16 @@ rm broden1_227.zip
 popd
 
 fi
+fi
 
 # Download broden1_384
 if [ ! -f dataset/broden1_384/index.csv ]
 then
+
+if [ -d "${LOCALDATA}/broden1_384" ]
+then
+ln -s "${LOCALDATA}/broden1_384" broden1_384
+else
 
 echo "Downloading broden1_384"
 mkdir -p dataset
@@ -52,6 +72,7 @@ unzip broden1_384.zip
 rm broden1_384.zip
 popd
 
+fi
 fi
 
 # Download segmodel
