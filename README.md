@@ -199,11 +199,13 @@ optional arguments:
 It can be used from code as a function, as follows:
 
 1. Load up the convolutional model you wish to dissect, and call
-   `retain_layers(model, [layernames,..])` to instrument the model.
+   `imodel = InstrumentedModel(model)` and then
+   `imodel.retain_layers([layernames,..])` to instrument the model.
 2. Load the segmentation dataset using the BrodenDataset class;
-   use the `transform_image` argument to normalize images to be suitable for the model, and the `size` argument to truncate the dataset.
+   use the `transform_image` argument to normalize images to
+   be suitable for the model, and the `size` argument to truncate the dataset.
 3. Choose a directory in which to write the output, and call
-   `dissect(outdir, model, dataset)`.
+   `dissect(outdir, imodel, dataset)`.
 
 A quick approximate dissection can be done by reducing the `size`
 of the `BrodenDataset`.  Generating example images can be time-consuming
@@ -212,13 +214,13 @@ and the number of images can be set via `examples_per_unit`.
 Example:
 
 ```
-    from netdissect import retain_layers, dissect
+    from netdissect import InstrumentedModel, dissect
     from netdissect import BrodenDataset
 
-    model = load_my_model()
+    model = InstrumentedModel(load_my_model())
     model.eval()
     model.cuda()
-    retain_layers(model, ['conv1', 'conv2', 'conv3', 'conv4', 'conv5'])
+    model.retain_layers(['conv1', 'conv2', 'conv3', 'conv4', 'conv5'])
     bds = BrodenDataset('dataset/broden1_227',
             transform_image=transforms.Compose([
                 transforms.ToTensor(),
@@ -247,13 +249,13 @@ The time for the dissection is proportional to the number of samples
 in the dataset.
 
 ```
-    from netdissect import retain_layers, dissect
+    from netdissect import InstrumentedModel, dissect
     from netdissect import z_dataset_for_model, GeneratorSegRunner
 
-    model = load_my_model()
+    model = InstrumentedModel(load_my_model())
     model.eval()
     model.cuda()
-    retain_layers(model, ['layer3', 'layer4', 'layer5'])
+    model.retain_layers(model, ['layer3', 'layer4', 'layer5'])
     zds = z_dataset_for_model(size, model)
     dissect('result/gandissect', model, zds,
             segrunner=GeneratorSegRunner(),
