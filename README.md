@@ -51,6 +51,7 @@ and run:
 
 ```
 script/setup_env.sh      # Create a conda environment with dependencies
+script/make_dirs.sh      # Create the dataset and dissect directories
 script/download_data.sh  # Download support data and demo GANs
 source activate netd     # Enter the conda environment
 pip install -v -e .      # Link the local netdissect package into the env
