@@ -269,8 +269,8 @@ def compute_mean_present_features(args, corpus, cache_filename, model):
                     torch.arange(feat.shape[0]).to(feat.device), :, featloc
                     ].sum(0)
             total_present_feature = total_present_feature + sum_feature_at_obj
-        corpus.mean_present_feature = total_present_feature / len(
-                corpus.object_present_sample)
+        corpus.mean_present_feature = (total_present_feature / len(
+                corpus.object_present_sample)).cpu()
     if cache_filename:
         numpy.savez(cache_filename, **corpus)
 
