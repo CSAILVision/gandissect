@@ -50,8 +50,10 @@ def main():
                         help='filename of .pth file for the model')
     parser.add_argument('--unstrict', action='store_true', default=False,
                         help='ignore unexpected pth parameters')
+    parser.add_argument('--modelkey', type=str, default=None,
+                        help='key within pthfile containing state_dict')
     parser.add_argument('--submodule', type=str, default=None,
-                        help='submodule to load from pthfile')
+                        help='submodule to load from pthfile state dict')
     parser.add_argument('--outdir', type=str, default='dissect',
                         help='directory for dissection output')
     parser.add_argument('--layers', type=strpair, nargs='+',

@@ -47,12 +47,13 @@ def create_instrumented_model(args, **kwargs):
     meta = {}
     if getattr(args, 'pthfile', None) is not None:
         data = torch.load(args.pthfile)
-        if 'state_dict' in data:
+        modelkey = getattr(args, 'modelkey', 'state_dict')
+        if modelkey in data:
             meta = {}
             for key in data:
                 if isinstance(data[key], numbers.Number):
                     meta[key] = data[key]
-            data = data['state_dict']
+            data = data[modelkey]
         submodule = getattr(args, 'submodule', None)
         if submodule is not None and len(submodule):
             remove_prefix = submodule + '.'
