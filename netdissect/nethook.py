@@ -188,7 +188,7 @@ class InstrumentedModel(torch.nn.Module):
         if aka in self._replacement:
             del self._replacement[aka]
         if aka in self._retained:
-            del self._replacement[aka]
+            del self._retained[aka]
 
     def _postprocess_forward(self, x, aka):
         '''
