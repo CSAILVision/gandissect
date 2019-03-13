@@ -63,6 +63,8 @@ def main():
                         help='directory containing segmentation dataset')
     parser.add_argument('--segmenter', type=str, default=None,
                         help='constructor for asegmenter class')
+    parser.add_argument('--normalizer', type=str, default=None,
+                        help='Normalize rgb with imagenet, zc, or pt ranges')
     parser.add_argument('--download', action='store_true', default=False,
                         help='downloads Broden dataset if needed')
     parser.add_argument('--imagedir', type=str, default=None,
@@ -204,7 +206,8 @@ def main():
             segrunner = ImageOnlySegRunner(dataset)
         else:
             dataset = try_to_load_broden(args.segments, args.imgsize, 1,
-                perturbation, args.download, args.size)
+                perturbation, args.download, args.size,
+                normalizer_named(args.normalizer))
         if dataset is None:
             dataset = try_to_load_multiseg(args.segments, args.imgsize,
                     perturbation, args.size)
@@ -298,13 +301,16 @@ def try_to_load_images(directory, imgsize, perturbation, size):
             size=size)
 
 def try_to_load_broden(directory, imgsize, broden_version, perturbation,
-        download, size):
+        download, size, normalizer=None):
     # Load broden dataset
     ds_resolution = (224 if max(imgsize) <= 224 else
                      227 if max(imgsize) <= 227 else 384)
     if not os.path.isfile(os.path.join(directory,
            'broden%d_%d' % (broden_version, ds_resolution), 'index.csv')):
         return None
+    # normalizers are "imagenet", "pm1", "pt"
+    if normalizer is None:
+        normalizer = transforms.Normalize(IMAGE_MEAN, IMAGE_STDEV)
     return BrodenDataset(directory,
             resolution=ds_resolution,
             download=download,
@@ -313,7 +319,7 @@ def try_to_load_broden(directory, imgsize, broden_version, perturbation,
                 transforms.Resize(imgsize),
                 AddPerturbation(perturbation),
                 transforms.ToTensor(),
-                transforms.Normalize(IMAGE_MEAN, IMAGE_STDEV)]),
+                normalizer]),
             size=size)
 
 def try_to_load_multiseg(directory, imgsize, perturbation, size):
@@ -405,6 +411,18 @@ class FloatRange(object):
 # Many models use this normalization.
 IMAGE_MEAN = [0.485, 0.456, 0.406]
 IMAGE_STDEV = [0.229, 0.224, 0.225]
+def normalizer_named(n):
+    if n is None:
+        return None
+    if n == 'imagenet':
+        return transforms.Normalize(IMAGE_MEAN, IMAGE_STDEV)
+    if n == 'zc':
+        # Transform pytorch [0..1] to [-1..1]
+        return transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
+    if n == 'pt':
+        # Leave pytorch [0..1] unchanged.
+        return transforms.Normalize([0.0, 0.0, 0.0], [1.0, 1.0, 1.0])
+    assert False, 'unknown normalizer %s' % n
 
 if __name__ == '__main__':
     main()
