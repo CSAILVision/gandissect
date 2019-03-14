@@ -45,6 +45,39 @@ class BaseSegmenter:
         '''
         raise NotImplemented()
 
+class NoSegmenter(BaseSegmenter):
+    def get_label_and_category_names(self):
+        return [('-', '-')], ['-']
+
+    def segment_batch(self, tensor_images, downsample=1):
+        '''
+        Returns the all-zero segmentation.
+        '''
+        return torch.zeros(
+                (tensor_images.shape[0], 1,
+                    tensor_images.shape[2] // downsample,
+                    tensor_images.shape[3] // downsample),
+                dtype=torch.long,
+                device=tensor_images.device)
+
+    def predict_single_class(self, tensor_images, classnum, downsample=1):
+        '''
+        Returns the all-zero segmentation.
+        '''
+        pred = torch.zeros(
+                (tensor_images.shape[0], 1,
+                    tensor_images.shape[2] // downsample,
+                    tensor_images.shape[3] // downsample),
+                dtype=torch.float32,
+                device=tensor_images.device)
+        mask = torch.zeros(
+                (tensor_images.shape[0], 1,
+                    tensor_images.shape[2] // downsample,
+                    tensor_images.shape[3] // downsample),
+                dtype=torch.uint8,
+                device=tensor_images.device)
+        return result, mask
+
 class UnifiedParsingSegmenter(BaseSegmenter):
     '''
     This is a wrapper for a more complicated multi-class segmenter,
