@@ -3,8 +3,8 @@ import numpy
 from scipy.interpolate import RectBivariateSpline
 
 def activation_visualization(image, data, level, alpha=0.5, source_shape=None,
-        crop=False, zoom=None, border=2, negate=False, return_mask=False,
-        **kwargs):
+        target_shape=None, crop=False, zoom=None, border=2,
+        negate=False, return_mask=False, **kwargs):
     """
     Makes a visualiztion image of activation data overlaid on the image.
     Params:
@@ -39,6 +39,11 @@ def activation_visualization(image, data, level, alpha=0.5, source_shape=None,
             source_rect = (0, surface.shape[0], 0, surface.shape[1])
         image = zoom_image(image, source_rect, crop)
         surface = zoom_image(surface, source_rect, crop)
+    # Rescale visualization to target_shape if specified.
+    if target_shape is not None and (image.shape[0] != target_shape[0]
+            or image.shape[1] != target_shape[1]):
+        image = zoom_image(image, target_shape=target_shape)
+        surface = zoom_image(surface, target_shape=target_shape)
     mask = (surface >= level)
     # Add a yellow border at the edge of the mask for contrast
     result = (mask[:, :, None] * (1 - alpha) + alpha) * image
@@ -133,13 +138,16 @@ def best_sub_rect(mask, shape, max_zoom=None, pad=2):
     nr = nl + width
     return (nt, nb, nl, nr)
 
-def zoom_image(img, source_rect, target_shape=None):
+def zoom_image(img, source_rect=None, target_shape=None):
     """Zooms pixels from the source_rect of img to target_shape."""
     import warnings
     from scipy.ndimage import zoom
     if target_shape is None:
         target_shape = img.shape
-    st, sb, sl, sr = source_rect
+    if source_rect is None:
+        st, sb, sl, sr = (0, img.shape[0], 0, img.shape[1])
+    else:
+        st, sb, sl, sr = source_rect
     source = img[st:sb, sl:sr]
     if source.shape == target_shape:
         return source

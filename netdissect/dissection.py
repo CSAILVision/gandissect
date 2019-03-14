@@ -39,7 +39,7 @@ from .progress import desc_progress
 from .runningstats import RunningQuantile, RunningTopK
 from .runningstats import RunningCrossCovariance, RunningConditionalQuantile
 from .sampler import FixedSubsetSampler
-from .actviz import activation_visualization
+from .actviz import activation_visualization, zoom_image
 from .segviz import segment_visualization, high_contrast
 from .workerpool import WorkerBase, WorkerPool
 from .segmenter import UnifiedParsingSegmenter
@@ -502,7 +502,7 @@ def generate_report(outdir, quantiledata, labelnames=None, catnames=None,
 def generate_images(outdir, model, dataset, topk, levels,
         segrunner, row_length=None, gap_pixels=5,
         row_images=True, single_images=False, prefix='',
-        batch_size=100, num_workers=24):
+        max_height=256, batch_size=100, num_workers=24):
     '''
     Creates an image strip file for every unit of every retained layer
     of the model, in the format [outdir]/[layername]/[unitnum]-top.jpg.
@@ -541,18 +541,24 @@ def generate_images(outdir, model, dataset, topk, levels,
         torch_features = model.retained_features()
         scale_offset = getattr(model, 'scale_offset', None)
         if pool is None:
+            height = byte_im.shape[1]
+            width = byte_im.shape[2]
+            if height > max_height:
+                width = (width * max_height) // height
+                height = max_height
             # Distribute the work across processes: create shared mmaps.
             for layer, tf in torch_features.items():
                 [vizgrid[layer], maskgrid[layer], origrid[layer],
                         seggrid[layer]] = [
                     create_temp_mmap_grid((tf.shape[1],
-                        byte_im.shape[1], row_length,
-                        byte_im.shape[2] + gap_pixels, depth),
+                        height, row_length, width + gap_pixels, depth),
                         dtype='uint8',
                         fill=255)
                     for depth in [3, 4, 3, 3]]
             # Pass those mmaps to worker processes.
             pool = WorkerPool(worker=VisualizeImageWorker,
+                    height=height,
+                    width=width,
                     memmap_grid_info=[
                         {layer: (g.filename, g.shape, g.dtype)
                             for layer, g in grid.items()}
@@ -635,24 +641,27 @@ def clear_global_shared_files(filenames):
             pass
 
 class VisualizeImageWorker(WorkerBase):
-    def setup(self, memmap_grid_info):
+    def setup(self, height, width, memmap_grid_info):
         self.vizgrid, self.maskgrid, self.origrid, self.seggrid = [
                 {layer: shared_temp_mmap_grid(*info)
                     for layer, info in grid.items()}
                 for grid in memmap_grid_info]
+        self.height, self.width = [height, width]
     def work(self, layer, unit, rank,
             byte_im, acts, level, scale_offset, seg):
-        self.origrid[layer][unit,:,rank,:byte_im.shape[0],:] = byte_im
-        [self.vizgrid[layer][unit,:,rank,:byte_im.shape[0],:],
-         self.maskgrid[layer][unit,:,rank,:byte_im.shape[0],:]] = (
+        self.origrid[layer][unit,:,rank,:self.width,:] = zoom_image(
+                byte_im, target_shape=(self.height, self.width))
+        [self.vizgrid[layer][unit,:,rank,:self.width,:],
+         self.maskgrid[layer][unit,:,rank,:self.width,:]] = (
                     activation_visualization(
                         byte_im,
                         acts,
                         level,
                         scale_offset=scale_offset,
+                        target_shape=(self.height, self.width),
                         return_mask=True))
-        self.seggrid[layer][unit,:,rank,:byte_im.shape[0],:] = (
-                    segment_visualization(seg, byte_im.shape[0:2]))
+        self.seggrid[layer][unit,:,rank,:self.width,:] = (
+                    segment_visualization(seg, (self.height, self.width)))
 
 class SaveImageWorker(WorkerBase):
     def work(self, data, filename):
