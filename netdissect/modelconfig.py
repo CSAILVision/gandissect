@@ -68,6 +68,13 @@ def create_instrumented_model(args, **kwargs):
     # Decide which layers to instrument.
     if getattr(args, 'layer', None) is not None:
         args.layers = [args.layer]
+    # If the layer '?' is the only specified, just print out all layers.
+    if getattr(args, 'layers', None) is not None:
+        if len(args.layers) == 1 and args.layers[0] == ('?', '?'):
+            for name, layer in model.named_modules():
+                print_progress(name)
+            import sys
+            sys.exit(0)
     if getattr(args, 'layers', None) is None:
         # Skip wrappers with only one named model
         container = model
