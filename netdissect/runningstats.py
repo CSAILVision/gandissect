@@ -674,6 +674,86 @@ class RunningCrossCovariance:
                 for k in ['cmom2_a', 'cmom2_b']]
         self.cmom2 = torch.from_numpy(dic['cmom2'])
 
+class RunningCovariance:
+    '''
+    Running computation. Use this when the entire covariance matrix is needed,
+    and when the whole covariance matrix fits in the GPU.
+
+    Chan-style numerically stable update of mean and full covariance matrix.
+    Chan, Golub. LeVeque. 1983. http://www.jstor.org/stable/2683386
+    '''
+    def __init__(self):
+        self.count = 0
+        self._mean = None
+        self.cmom2 = None
+
+    def add(self, a):
+        if len(a.shape) == 1:
+            a = a[None, :]
+        batch_count = a.shape[0]
+        batch_mean = a.sum(0) / batch_count
+        centered = a - batch_mean
+        # If more than 10 billion operations, divide into batches.
+        sub_batch = -(-(10 << 30) // (a.shape[1] * a.shape[1]))
+        # Initial batch.
+        if self._mean is None:
+            self.count = batch_count
+            self._mean = batch_mean
+            self.cmom2 = a.new(a.shape[1], a.shape[1]).zero_()
+            progress_addbmm(self.cmom2, centered[:,:,None], centered[:,None,:],
+                    sub_batch)
+            return
+        # Update a batch using Chan-style update for numerical stability.
+        oldcount = self.count
+        self.count += batch_count
+        new_frac = float(batch_count) / self.count
+        # Update the mean according to the batch deviation from the old mean.
+        delta = batch_mean.sub_(self._mean).mul_(new_frac)
+        self._mean.add_(delta)
+        # Update the variance using the batch deviation
+        progress_addbmm(self.cmom2, centered[:,:,None], centered[:,None,:],
+                    sub_batch)
+        self.cmom2.addmm_(
+            alpha=new_frac * oldcount, mat1=delta[:,None], mat2=delta[None,:])
+
+    def cpu_(self):
+        self._mean = self._mean.cpu()
+        self.cmom2 = self.cmom2.cpu()
+
+    def cuda_(self):
+        self._mean = self._mean.cuda()
+        self.cmom2 = self.cmom2.cuda()
+
+    def mean(self):
+        return self._mean
+
+    def covariance(self):
+        return self.cmom2 / self.count
+
+    def correlation(self):
+        covariance = self.covariance()
+        rstdev = covariance.diag().sqrt().reciprocal()
+        return rstdev[:,None] * covariance * rstdev[None,:]
+
+    def variance(self):
+        return self.covariance().diag()
+
+    def stdev(self):
+        return self.variance().sqrt()
+
+    def state_dict(self):
+        return dict(
+                constructor=self.__module__ + '.' +
+                    self.__class__.__name__ + '()',
+                count=self.count,
+                mean=self._mean.cpu().numpy(),
+                cmom2=self.cmom2.cpu().numpy())
+
+    def set_state_dict(self, dic):
+        self.count = dic['count'].item()
+        self._mean = torch.from_numpy(dic['mean'])
+        self.cmom2 = torch.from_numpy(dic['cmom2'])
+
 def progress_addbmm(accum, x, y, batch_size):
     '''
     Break up very large adbmm operations into batches so progress can be seen.
