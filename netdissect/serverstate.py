@@ -258,7 +258,7 @@ class GanTester:
         with torch.no_grad(), self.modellock:
             batch_size = 10
             self.apply_intervention(intervention)
-            test_loader = DataLoader(TensorDataset(z_batch[:,:,None,None]),
+            test_loader = DataLoader(TensorDataset(z_batch),
                 batch_size=batch_size,
                 pin_memory=('cuda' == self.device.type
                             and z_batch.device.type == 'cpu'))
