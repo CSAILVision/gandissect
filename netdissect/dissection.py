@@ -38,6 +38,7 @@ from .progress import verbose_progress, default_progress, print_progress
 from .progress import desc_progress
 from .runningstats import RunningQuantile, RunningTopK
 from .runningstats import RunningCrossCovariance, RunningConditionalQuantile
+from .runningstats import RunningCovariance
 from .sampler import FixedSubsetSampler
 from .actviz import activation_visualization, zoom_image
 from .segviz import segment_visualization, high_contrast
@@ -55,6 +56,7 @@ def dissect(outdir, model, dataset,
         batch_size=100,
         num_workers=24,
         seg_batch_size=5,
+        pca_units=False,
         make_images=True,
         make_labels=True,
         make_maxiou=False,
@@ -87,17 +89,23 @@ def dissect(outdir, model, dataset,
         maxioudata, iqrdata = None, None
         labeldata = None
         iqrdata, cov = None, None
+        whiten = lambda x: x
 
         labelnames, catnames = segrunner.get_label_and_category_names()
         label_category = [catnames.index(c) if c in catnames else 0
                 for l, c in labelnames]
 
-        # First, always collect qunatiles and topk information.
         segloader = torch.utils.data.DataLoader(dataset,
                 batch_size=batch_size, num_workers=num_workers,
                 pin_memory=(device.type == 'cuda'))
+
+        # If whitening, this comes first.
+        if pca_units:
+            whiten = collect_unit_pca(outdir, model, segloader, segrunner)
+
+        # always collect qunatiles and topk information.
         quantiles, topk = collect_quantiles_and_topk(outdir, model,
-            segloader, segrunner, k=examples_per_unit)
+            segloader, segrunner, k=examples_per_unit, whiten=whiten)
 
         # Thresholds can be automatically chosen by maximizing iqr
         if make_iqr:
@@ -105,7 +113,8 @@ def dissect(outdir, model, dataset,
             segloader = torch.utils.data.DataLoader(train_dataset,
                     batch_size=1, num_workers=num_workers,
                     pin_memory=(device.type == 'cuda'))
-            iqrdata = collect_iqr(outdir, model, segloader, segrunner)
+            iqrdata = collect_iqr(outdir, model, segloader, segrunner,
+                    whiten=whiten)
             max_iqr, full_iqr_levels = iqrdata[:2]
             max_iqr_agreement = iqrdata[4]
             # qualified_iqr[max_iqr_quantile[layer] > 0.5] = 0
@@ -127,7 +136,8 @@ def dissect(outdir, model, dataset,
                     row_length=examples_per_unit, batch_size=seg_batch_size,
                     row_images=make_row_images,
                     single_images=make_single_images,
-                    num_workers=num_workers)
+                    num_workers=num_workers,
+                    whiten=whiten)
 
         if make_maxiou:
             assert train_dataset, "Need training dataset for maxiou."
@@ -135,7 +145,7 @@ def dissect(outdir, model, dataset,
                     batch_size=1, num_workers=num_workers,
                     pin_memory=(device.type == 'cuda'))
             maxioudata = collect_maxiou(outdir, model, segloader,
-                    segrunner)
+                    segrunner, whiten=whiten)
 
         if make_labels:
             segloader = torch.utils.data.DataLoader(dataset,
@@ -143,7 +153,7 @@ def dissect(outdir, model, dataset,
                     pin_memory=(device.type == 'cuda'))
             iou_scores, iqr_scores, tcs, lcs, ccs, ics = (
                     collect_bincounts(outdir, model, segloader,
-                    levels, segrunner))
+                    levels, segrunner, whiten=whiten))
             labeldata = (iou_scores, iqr_scores, lcs, ccs, ics, iou_threshold,
                     iqr_threshold)
 
@@ -152,7 +162,8 @@ def dissect(outdir, model, dataset,
                     batch_size=seg_batch_size,
                     num_workers=num_workers,
                     pin_memory=(device.type == 'cuda'))
-            cov = collect_covariance(outdir, model, segloader, segrunner)
+            cov = collect_label_covariance(outdir, model, segloader, segrunner,
+                    whiten=whiten)
 
         if make_report:
             generate_report(outdir,
@@ -500,7 +511,7 @@ def generate_report(outdir, quantiledata, labelnames=None, catnames=None,
 
 
 def generate_images(outdir, model, dataset, topk, levels,
-        segrunner, row_length=None, gap_pixels=5,
+        segrunner, whiten=(lambda x: x), row_length=None, gap_pixels=5,
         row_images=True, single_images=False, prefix='',
         max_height=256, batch_size=100, num_workers=24):
     '''
@@ -538,7 +549,7 @@ def generate_images(outdir, model, dataset, topk, levels,
         # Reverse transformation to get the image in byte form.
         seg, _, byte_im, _ = segrunner.run_and_segment_batch(batch, model,
                 want_rgb=True)
-        torch_features = model.retained_features()
+        torch_features = whiten(model.retained_features())
         scale_offset = getattr(model, 'scale_offset', None)
         if pool is None:
             height = byte_im.shape[1]
@@ -687,7 +698,7 @@ def score_tally_stats(label_category, tc, truth, cc, ic):
     return iou, iqr
 
 def collect_quantiles_and_topk(outdir, model, segloader,
-        segrunner, k=100, resolution=1024):
+        segrunner, whiten=(lambda x: x), k=100, resolution=1024):
     '''
     Collects (estimated) quantile information and (exact) sorted top-K lists
     for every channel in the retained layers of the model.  Returns
@@ -695,7 +706,7 @@ def collect_quantiles_and_topk(outdir, model, segloader,
     a map of topk (one RunningTopK for each layer).
     '''
     device = next(model.parameters()).device
-    features = model.retained_features()
+    features = whiten(model.retained_features())
     cached_quantiles = {
             layer: load_quantile_if_present(os.path.join(outdir,
                 safe_dir_name(layer)), 'quantiles.npz',
@@ -721,7 +732,7 @@ def collect_quantiles_and_topk(outdir, model, segloader,
         for i, batch in enumerate(progress(segloader, desc='Quantiles')):
             # We don't actually care about the model output.
             model(batch[0].to(device))
-            features = model.retained_features()
+            features = whiten(model.retained_features())
             # We care about the retained values
             for key in layer_batch:
                 value = features[key]
@@ -749,7 +760,8 @@ def collect_quantiles_and_topk(outdir, model, segloader,
                 os.path.join(outdir, safe_dir_name(layer), 'topk.npz'))
     return quantiles, topks
 
-def collect_bincounts(outdir, model, segloader, levels, segrunner):
+def collect_bincounts(outdir, model, segloader, levels, segrunner,
+        whiten=(lambda x: x)):
     '''
     Returns label_counts, category_activation_counts, and intersection_counts,
     across the data set, counting the pixels of intersection between upsampled,
@@ -823,7 +835,7 @@ def collect_bincounts(outdir, model, segloader, levels, segrunner):
         bc = batch_label_counts.cpu()
         batch_label_counts = batch_label_counts.to(device)
         seg = seg.to(device)
-        features = model.retained_features()
+        features = whiten(model.retained_features())
         # Accumulate bincounts and identify nonzeros
         label_counts += batch_label_counts[0]
         batch_labels = bc[0].nonzero()[:,0]
@@ -884,7 +896,8 @@ def collect_bincounts(outdir, model, segloader, levels, segrunner):
             total_counts, label_counts, category_activation_counts,
             intersection_counts)
 
-def collect_cond_quantiles(outdir, model, segloader, segrunner):
+def collect_cond_quantiles(outdir, model, segloader, segrunner,
+        whiten=(lambda x: x)):
     '''
     Returns maxiou and maxiou_level across the data set, one per layer.
 
@@ -926,7 +939,7 @@ def collect_cond_quantiles(outdir, model, segloader, segrunner):
             seg, batch_label_counts, im, _ = segrunner.run_and_segment_batch(
                     batch, model, want_bincount=True, want_rgb=True)
             batch_label_counts = batch_label_counts.to(device)
-            features = model.retained_features()
+            features = whiten(model.retained_features())
             # Accumulate bincounts and identify nonzeros
             label_counts += batch_label_counts[0]
             pixel_count += seg.shape[2] * seg.shape[3]
@@ -948,7 +961,7 @@ def collect_cond_quantiles(outdir, model, segloader, segrunner):
                          batch, model, want_bincount=True, want_rgb=True))
             bc = batch_label_counts.cpu()
             batch_label_counts = batch_label_counts.to(device)
-            features = model.retained_features()
+            features = whiten(model.retained_features())
             # Accumulate bincounts and identify nonzeros
             label_counts += batch_label_counts[0]
             pixel_count += seg.shape[2] * seg.shape[3]
@@ -1014,7 +1027,7 @@ def collect_cond_quantiles(outdir, model, segloader, segrunner):
     return conditional_quantiles, label_fracs
 
 
-def collect_maxiou(outdir, model, segloader, segrunner):
+def collect_maxiou(outdir, model, segloader, segrunner, whiten=(lambda x: x)):
     '''
     Returns maxiou and maxiou_level across the data set, one per layer.
 
@@ -1024,7 +1037,7 @@ def collect_maxiou(outdir, model, segloader, segrunner):
     '''
     device = next(model.parameters()).device
     conditional_quantiles, label_fracs = collect_cond_quantiles(
-            outdir, model, segloader, segrunner)
+            outdir, model, segloader, segrunner, whiten=whiten)
 
     labelcat, categories = segrunner.get_label_and_category_names()
     label_category = [categories.index(c) if c in categories else 0
@@ -1055,7 +1068,7 @@ def collect_maxiou(outdir, model, segloader, segrunner):
             max_iou_quantile=max_iou_quantile[layer].cpu().numpy())
     return (max_iou, max_iou_level, max_iou_quantile)
 
-def collect_iqr(outdir, model, segloader, segrunner):
+def collect_iqr(outdir, model, segloader, segrunner, whiten=(lambda x: x)):
     '''
     Returns iqr and iqr_level.
 
@@ -1085,7 +1098,7 @@ def collect_iqr(outdir, model, segloader, segrunner):
 
     device = next(model.parameters()).device
     conditional_quantiles, label_fracs = collect_cond_quantiles(
-            outdir, model, segloader, segrunner)
+            outdir, model, segloader, segrunner, whiten=whiten)
 
     labelcat, categories = segrunner.get_label_and_category_names()
     label_category = [categories.index(c) if c in categories else 0
@@ -1193,7 +1206,98 @@ def information_quality_ratio(arr):
     iqr[torch.isnan(iqr)] = 0
     return iqr
 
-def collect_covariance(outdir, model, segloader, segrunner):
+def collect_unit_pca(outdir, model, segloader, segrunner):
+    '''
+    Returns an instance of a pca whitener for the model.
+
+    label_mean, label_variance (independent of model):
+        treating the label as a one-hot, each label's mean and variance.
+    unit_mean, unit_variance (one per layer): for each feature channel,
+        the mean and variance of the activations in that channel.
+    cross_covariance (one per layer): the cross covariance between the
+        labels and the units in the layer.
+    '''
+    device = next(model.parameters()).device
+    # TODO: load cached pca instance.
+    # cov = {
+    #         layer: load_unit_covariance_if_present(os.path.join(outdir,
+    #             safe_dir_name(layer)), 'ucovariance.npz', device=device)
+    #         for layer in model.retained_features() }
+    # if all(value is not None for value in cached_covariance.values()):
+    #     return cached_covariance
+    
+    # Running unit covariance
+    cov = defaultdict(RunningCovariance)
+    progress = default_progress()
+    for i, batch in enumerate(progress(segloader, desc='Unit Covariance')):
+        segrunner.run_and_segment_batch(batch, model, want_segment=False)
+        features = model.retained_features()
+        # Accumulate bincounts and identify nonzeros
+        for key, value in features.items():
+            if len(value.shape) > 2:
+                # Put the channel index last.
+                value = value.permute(
+                        (0,) + tuple(range(2, len(value.shape))) + (1,)
+                        ).contiguous().view(-1, value.shape[1])
+            cov[key].add(value)
+    for layer in cov:
+        save_state_dict(cov[layer],
+                os.path.join(outdir, safe_dir_name(layer), 'ucovariance.npz'))
+    pca = WhitenPCA(cov)
+    save_state_dict(pca, os.path.join(outdir, 'whiten-pca.npz'))
+    return pca
+
+class WhitenPCA:
+    def __init__(self, cov=None):
+        self.whitener = {}
+        if cov is not None:
+            for layer, layercov in cov.items():
+                C = layercov.covariance()
+                U, S, V = torch.svd(C.double())
+                V = V.to(C.dtype)
+                # TODO: consider scaling by V = V / S[None, :]
+                weight = V.t() # do we need to transpose this?  Yes, I think so.
+                mean = layercov.mean()
+                self.whitener[layer] = (weight, mean)
+
+    def transform(self, layer, x):
+        weight, mean = self.whitener[layer]
+        if len(x.shape) == 4:
+            return torch.nn.functional.conv2d(
+                    x - mean[None, :, None, None],
+                    weight[:,:,None,None])
+        elif len(x.shape) == 2:
+            return torch.nn.functional.linear(x - mean, weight)
+        else:
+            assert False, 'Unknown shape for value %r' % (x.shape)
+
+    def state_dict(self):
+        result = dict(
+                constructor=self.__module__ + '.' +
+                    self.__class__.__name__ + '()')
+        for layer, (weight, mean) in self.whitener.items():
+            result[layer + '.weight'] = weight.cpu().numpy()
+            result[layer + '.mean'] = mean.cpu().numpy()
+        return result
+
+    def load_state_dict(self, data):
+        self.whitener = {}
+        for k in data:
+            if k.endswith('.weight'):
+                layer = k[:-len('.weight')]
+                self.whitener[layer] = tuple(torch.from_numpy(d)
+                    for d in [data[layer + '.weight'], data[layer +'.mean']])
+
+    def to_(self, device):
+        self.whitener = { k: (w.to(device), m.to(device))
+            for k, (w, m) in self.whitener.items() }
+
+    def __call__(self, features):
+        return { layer: self.transform(layer, x)
+                for layer, x in features.items() }
+
+def collect_label_covariance(outdir, model, segloader, segrunner,
+        whiten=(lambda x: x)):
     '''
     Returns label_mean, label_variance, unit_mean, unit_variance,
     and cross_covariance across the data set.
@@ -1222,10 +1326,10 @@ def collect_covariance(outdir, model, segloader, segrunner):
     progress = default_progress()
     scale_offset_map = getattr(model, 'scale_offset', None)
     upsample_grids = {}
-    for i, batch in enumerate(progress(segloader, desc='Covariance')):
+    for i, batch in enumerate(progress(segloader, desc='Label Covariance')):
         seg, _, _, imshape = segrunner.run_and_segment_batch(batch, model,
                 want_rgb=True)
-        features = model.retained_features()
+        features = whiten(model.retained_features())
         ohfeats = multilabel_onehot(seg, num_labels, ignore_index=0)
         # Accumulate bincounts and identify nonzeros
         for key, value in features.items():
@@ -1520,7 +1624,7 @@ class ImageOnlySegRunner:
     def get_label_and_category_names(self):
         return [('-', '-')], ['-']
     def run_and_segment_batch(self, batch, model,
-            want_bincount=False, want_rgb=False):
+            want_bincount=False, want_rgb=False, want_segment=True):
         [im] = batch
         device = next(model.parameters()).device
         if want_rgb:
@@ -1549,7 +1653,7 @@ class ClassifierSegRunner:
                 for i, label in enumerate(self.dataset.labels)]
         return label_and_cat_names, catnames
     def run_and_segment_batch(self, batch, model,
-            want_bincount=False, want_rgb=False):
+            want_bincount=False, want_rgb=False, want_segment=True):
         '''
         Runs the dissected model on one batch of the dataset, and
         returns a multilabel semantic segmentation for the data.
@@ -1588,7 +1692,7 @@ class GeneratorSegRunner:
     def get_label_and_category_names(self):
         return self.segmenter.get_label_and_category_names()
     def run_and_segment_batch(self, batch, model,
-            want_bincount=False, want_rgb=False):
+            want_bincount=False, want_rgb=False, want_segment=True):
         '''
         Runs the dissected model on one batch of the dataset, and
         returns a multilabel semantic segmentation for the data.
@@ -1609,7 +1713,10 @@ class GeneratorSegRunner:
         device = next(model.parameters()).device
         z_batch = batch[0]
         tensor_images = model(z_batch.to(device))
-        seg = self.segmenter.segment_batch(tensor_images, downsample=2)
+        if want_segment:
+            seg = self.segmenter.segment_batch(tensor_images, downsample=2)
+        else:
+            seg = None
         if want_bincount:
             index = torch.arange(z_batch.shape[0],
                     dtype=torch.long, device=device)

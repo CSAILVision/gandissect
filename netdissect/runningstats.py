@@ -682,7 +682,10 @@ class RunningCovariance:
     Chan-style numerically stable update of mean and full covariance matrix.
     Chan, Golub. LeVeque. 1983. http://www.jstor.org/stable/2683386
     '''
-    def __init__(self):
+    def __init__(self, state=None):
+        if state is not None:
+            self.set_state_dict(state)
+            return
         self.count = 0
         self._mean = None
         self.cmom2 = None

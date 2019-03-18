@@ -88,6 +88,8 @@ def main():
     parser.add_argument('--quantile_threshold', type=strfloat, default=None,
                         choices=[FloatRange(0.0, 1.0), 'iqr'],
                         help='quantile to use for masks')
+    parser.add_argument('--whiten', default=None,
+                        help='set to pca to whiten units')
     parser.add_argument('--no-labels', action='store_true', default=False,
                         help='disables labeling of units')
     parser.add_argument('--maxiou', action='store_true', default=False,
@@ -231,6 +233,7 @@ def main():
             quantile_threshold=args.quantile_threshold,
             meta=meta,
             merge=mergedata,
+            pca_units=(args.whiten == 'pca'),
             make_images=args.images,
             make_labels=args.labels,
             make_maxiou=args.maxiou,
