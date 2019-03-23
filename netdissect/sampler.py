@@ -101,7 +101,42 @@ def coordinate_sample(shape, sample_size, seeds, grid=13, seed=1, flat=False):
             sampind[j] = coords
     return sampind
 
-if __name__ == '__main__':
+def main():
+    from netdissect import parallelfolder
+    import argparse, os, shutil
+
+    parser = argparse.ArgumentParser(description='Net dissect utility',
+            prog='python -m netdissect.sampler')
+    parser.add_argument('indir')
+    parser.add_argument('outdir')
+    parser.add_argument('--size', type=int, default=100)
+    parser.add_argument('--test', action='store_true', default=False)
+    args = parser.parse_args()
+    if os.path.exists(args.outdir):
+        print('%s already exists' % args.outdir)
+        sys.exit(1)
+    os.makedirs(args.outdir)
+    dataset = parallelfolder.ParallelImageFolders([args.indir])
+    sampler = FixedRandomSubsetSampler(dataset, end=args.size)
+    seen_filenames = set()
+    def number_filename(filename, number):
+        if '.' in filename:
+            a, b = filename.rsplit('.', 1)
+            return a + '_%d.' % number + b
+        return filename + '_%d' % number
+    for i in sampler.dereference(range(args.size)):
+        sourcefile = dataset.images[i][0]
+        filename = os.path.basename(sourcefile)
+        template = filename
+        num = 0
+        while filename in seen_filenames:
+            num += 1
+            filename = number_filename(template, num)
+        seen_filenames.add(filename)
+        shutil.copy(os.path.join(args.indir, sourcefile),
+                os.path.join(args.outdir, filename))
+
+def test():
     from numpy.testing import assert_almost_equal
     # Test that coordinate_sample is deterministic, in-range, and scalable.
     assert_almost_equal(coordinate_sample((26, 26), 10, range(101, 102)),
@@ -124,11 +159,18 @@ if __name__ == '__main__':
     # Test FixedRandomSubsetSampler
     fss = FixedRandomSubsetSampler(range(10))
     assert len(fss) == 10
-    assert_almost_equal(list(fss), [8, 0, 3, 4, 5, 2, 9, 6, 7, 1])
+    assert_almost_equal(list(fss), [6, 8, 9, 7, 5, 3, 0, 4, 1, 2])
     fss = FixedRandomSubsetSampler(range(10), 3, 8)
     assert len(fss) == 5
-    assert_almost_equal(list(fss), [4, 5, 2, 9, 6])
-    fss = FixedRandomSubsetSampler([(i, i % 3) for i in range(10)],
-            class_filter=1)
+    assert_almost_equal(list(fss), [7, 5, 3, 0, 4])
+    fss = FixedRandomSubsetSampler([(i, i % 3) for i in range(10)]
+            ).class_subset(class_filter=1)
     assert len(fss) == 3
-    assert_almost_equal(list(fss), [4, 7, 1])
+    assert_almost_equal(list(fss), [7, 4, 1])
+
+if __name__ == '__main__':
+    import sys
+    if '--test' in sys.argv[1:]:
+        test()
+    else:
+        main()

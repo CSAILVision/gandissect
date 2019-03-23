@@ -27,7 +27,9 @@ def main():
     directory1, directory2 = args.directory1, args.directory2
     t1, t2 = [cached_tally_directory(d, size=args.size)
             for d in [directory1, directory2]]
-    print(frechet_distance.sample_frechet_distance(t1 * 100, t2 * 100))
+    fsd, meandiff, covdiff = frechet_distance.sample_frechet_distance(
+            t1 * 100, t2 * 100, return_components=True)
+    print('fsd: %f; meandiff: %f; covdiff: %f' % (fsd, meandiff, covdiff))
 
 def cached_tally_directory(directory, size=10000):
     filename = '%s_segtally_%d.npy' % (directory, size)

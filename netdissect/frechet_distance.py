@@ -23,16 +23,19 @@ import torch
 from scipy import linalg
 from scipy.misc import imread
 
-def sample_frechet_distance(sample1, sample2, eps=1e-6):
+def sample_frechet_distance(sample1, sample2, eps=1e-6,
+        return_components=False):
     '''
     Both samples should be numpy arrays.
     Returns the Frechet distance.
     '''
     (mu1, sigma1), (mu2, sigma2) = [calculate_activation_statistics(s)
             for s in [sample1, sample2]]
-    return calculate_frechet_distance(mu1, sigma1, mu2, sigma2, eps=eps)
+    return calculate_frechet_distance(mu1, sigma1, mu2, sigma2, eps=eps,
+            return_components=return_components)
 
-def calculate_frechet_distance(mu1, sigma1, mu2, sigma2, eps=1e-6):
+def calculate_frechet_distance(mu1, sigma1, mu2, sigma2, eps=1e-6,
+        return_components=False):
     """Numpy implementation of the Frechet Distance.
     The Frechet distance between two multivariate Gaussians X_1 ~ N(mu_1, C_1)
     and X_2 ~ N(mu_2, C_2) is
@@ -85,8 +88,12 @@ def calculate_frechet_distance(mu1, sigma1, mu2, sigma2, eps=1e-6):
 
     tr_covmean = np.trace(covmean)
 
-    return (diff.dot(diff) + np.trace(sigma1) +
-            np.trace(sigma2) - 2 * tr_covmean)
+    meandiff = diff.dot(diff)
+    covdiff = np.trace(sigma1) + np.trace(sigma2) - 2 * tr_covmean
+    if return_components:
+        return (meandiff + covdiff, meandiff, covdiff)
+    else:
+        return meandiff + covdiff
 
 
 def calculate_activation_statistics(act):
