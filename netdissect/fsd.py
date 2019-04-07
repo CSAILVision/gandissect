@@ -16,25 +16,27 @@ def main():
     parser.add_argument('directory1')
     parser.add_argument('directory2')
     parser.add_argument('--size', type=int, default=10000)
+    parser.add_argument('--cachedir', default=None)
     if len(sys.argv) == 1:
         parser.print_usage(sys.stderr)
         sys.exit(1)
     args = parser.parse_args()
-    if len(sys.argv) != 3:
-        parser.print_usage(sys.stderr)
-        sys.exit(1)
     verbose_progress(True)
     directory1, directory2 = args.directory1, args.directory2
-    t1, t2 = [cached_tally_directory(d, size=args.size)
+    t1, t2 = [cached_tally_directory(d, size=args.size, cachedir=args.cachedir)
             for d in [directory1, directory2]]
     fsd, meandiff, covdiff = frechet_distance.sample_frechet_distance(
             t1 * 100, t2 * 100, return_components=True)
     print('fsd: %f; meandiff: %f; covdiff: %f' % (fsd, meandiff, covdiff))
 
-def cached_tally_directory(directory, size=10000):
+def cached_tally_directory(directory, size=10000, cachedir=None):
     filename = '%s_segtally_%d.npy' % (directory, size)
+    if cachedir is not None:
+        filename = os.path.join(cachedir,
+                os.path.abspath(filename).replace('/', '_'))
     if os.path.isfile(filename):
         return numpy.load(filename)
+    os.makedirs(cachedir, exist_ok=True)
     result = tally_directory(directory, size)
     numpy.save(filename, result)
     return result
