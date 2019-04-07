@@ -27,9 +27,11 @@ def main():
     args = parser.parse_args()
     verbose_progress(True)
     true_dir, gen_dir = args.true_dir, args.gen_dir
+    seed1, seed2 = [1, 1 if true_dir != gen_dir else 2]
     true_tally, gen_tally = [
-            cached_tally_directory(d, size=args.size, cachedir=args.cachedir)
-            for d in [true_dir, gen_dir]]
+            cached_tally_directory(d, size=args.size, cachedir=args.cachedir,
+                seed=seed)
+            for d, seed in [(true_dir, seed1), (gen_dir, seed2)]]
     fsd, meandiff, covdiff = frechet_distance.sample_frechet_distance(
             true_tally * 100, gen_tally * 100, return_components=True)
     print('fsd: %f; meandiff: %f; covdiff: %f' % (fsd, meandiff, covdiff))
@@ -40,20 +42,21 @@ def main():
                 dpi=args.dpi
                 ).savefig(args.histout)
 
-
-def cached_tally_directory(directory, size=10000, cachedir=None):
+def cached_tally_directory(directory, size=10000, cachedir=None, seed=1):
     filename = '%s_segtally_%d.npy' % (directory, size)
+    if seed != 1:
+        filename = '%d_%s' % (seed, filename)
     if cachedir is not None:
         filename = os.path.join(cachedir,
                 os.path.abspath(filename).replace('/', '_'))
     if os.path.isfile(filename):
         return numpy.load(filename)
     os.makedirs(cachedir, exist_ok=True)
-    result = tally_directory(directory, size)
+    result = tally_directory(directory, size, seed=seed)
     numpy.save(filename, result)
     return result
 
-def tally_directory(directory, size=10000):
+def tally_directory(directory, size=10000, seed=1):
     progress = default_progress()
     dataset = parallelfolder.ParallelImageFolders(
                 [directory],
@@ -64,7 +67,8 @@ def tally_directory(directory, size=10000):
                     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
                     ]))
     loader = DataLoader(dataset,
-                        sampler=FixedRandomSubsetSampler(dataset, end=size),
+                        sampler=FixedRandomSubsetSampler(dataset, end=size,
+                            seed=1),
                         # sampler=FixedSubsetSampler(range(size)),
                         batch_size=10, pin_memory=True)
     upp = segmenter.UnifiedParsingSegmenter()
