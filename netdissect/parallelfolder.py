@@ -4,7 +4,7 @@ information, such as parallel feature channels in separate files,
 cached files with lists of filenames, etc.
 '''
 
-import os, torch, re
+import os, torch, re, random
 import torch.utils.data as data
 from torchvision.datasets.folder import default_loader
 from PIL import Image
@@ -33,12 +33,15 @@ class ParallelImageFolders(data.Dataset):
             stacker=None,
             intersection=False,
             verbose=None,
-            size=None):
+            size=None,
+            shuffle=None):
         self.image_roots = image_roots
         self.images = make_parallel_dataset(image_roots,
                 intersection=intersection, verbose=verbose)
         if len(self.images) == 0:
             raise RuntimeError("Found 0 images within: %s" % image_roots)
+        if shuffle is not None:
+            random.Random(shuffle).shuffle(self.images)
         if size is not None:
             self.image = self.images[:size]
         if transform is not None and not hasattr(transform, '__iter__'):
