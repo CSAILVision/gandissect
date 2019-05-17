@@ -5,8 +5,8 @@ InstrumentedModel will wrap a pytorch model and allow hooking
 arbitrary layers to monitor or modify their output directly.
 '''
 
-import torch, numpy, types
-from collections import OrderedDict
+import torch, numpy, types, copy
+from collections import OrderedDict, defaultdict
 
 class InstrumentedModel(torch.nn.Module):
     '''
@@ -17,20 +17,23 @@ class InstrumentedModel(torch.nn.Module):
     model = load_my_model()
     with inst as InstrumentedModel(model):
         inst.retain_layer(layername)
-        inst.edit_layer(layername, 0.5, target_features)
+        inst.edit_layer(layername, ablation=0.5, replacement=target_features)
         inst(inputs)
         original_features = inst.retained_layer(layername)
     ```
     '''
 
     def __init__(self, model):
-        super(InstrumentedModel, self).__init__()
+        super().__init__()
         self.model = model
         self._retained = OrderedDict()
-        self._ablation = {}
-        self._replacement = {}
+        self._detach_retained = {}
+        self._editargs = defaultdict(dict)
+        self._editrule = {}
         self._hooked_layer = {}
         self._old_forward = {}
+        if isinstance(model, torch.nn.Sequential):
+            self._hook_sequential()
 
     def __enter__(self):
         return self
@@ -41,16 +44,16 @@ class InstrumentedModel(torch.nn.Module):
     def forward(self, *inputs, **kwargs):
         return self.model(*inputs, **kwargs)
 
-    def retain_layer(self, layername):
+    def retain_layer(self, layername, detach=True):
         '''
         Pass a fully-qualified layer name (E.g., module.submodule.conv3)
         to hook that layer and retain its output each time the model is run.
         A pair (layername, aka) can be provided, and the aka will be used
         as the key for the retained value instead of the layername.
         '''
-        self.retain_layers([layername])
+        self.retain_layers([layername], detach=detach)
 
-    def retain_layers(self, layernames):
+    def retain_layers(self, layernames, detach=True):
         '''
         Retains a list of a layers at once.
         '''
@@ -61,12 +64,30 @@ class InstrumentedModel(torch.nn.Module):
                 layername, aka = layername
             if aka not in self._retained:
                 self._retained[aka] = None
+                self._detach_retained[aka] = detach
 
-    def retained_features(self):
+    def stop_retaining_layers(self, layernames):
+        '''
+        Removes a list of layers from the set retained.
+        '''
+        self.add_hooks(layernames)
+        for layername in layernames:
+            aka = layername
+            if not isinstance(aka, str):
+                layername, aka = layername
+            if aka in self._retained:
+                del self._retained[aka]
+                del self._detach_retained[aka]
+
+    def retained_features(self, clear=False):
         '''
         Returns a dict of all currently retained features.
         '''
-        return OrderedDict(self._retained)
+        result = OrderedDict(self._retained)
+        if clear:
+            for k in result:
+                self._retained[k] = None
+        return result
 
     def retained_layer(self, aka=None, clear=False):
         '''
@@ -82,7 +103,7 @@ class InstrumentedModel(torch.nn.Module):
             self._retained[aka] = None
         return result
 
-    def edit_layer(self, layername, ablation=None, replacement=None):
+    def edit_layer(self, layername, rule=None, **kwargs):
         '''
         Pass a fully-qualified layer name (E.g., module.submodule.conv3)
         to hook that layer and modify its output each time the model is run.
@@ -95,13 +116,13 @@ class InstrumentedModel(torch.nn.Module):
         else:
             aka = layername
 
-        # The default ablation if a replacement is specified is 1.0.
-        if ablation is None and replacement is not None:
-            ablation = 1.0
+        # The default editing rule is apply_ablation_replacement
+        if rule is None:
+            rule = apply_ablation_replacement
+
         self.add_hooks([(layername, aka)])
-        self._ablation[aka] = ablation
-        self._replacement[aka] = replacement
-        # If needed, could add an arbitrary postprocessing lambda here.
+        self._editargs[aka].update(kwargs)
+        self._editrule[aka] = rule
 
     def remove_edits(self, layername=None):
         '''
@@ -109,18 +130,18 @@ class InstrumentedModel(torch.nn.Module):
         if no layer name is specified.
         '''
         if layername is None:
-            self._ablation.clear()
-            self._replacement.clear()
+            self._editargs.clear()
+            self._editrule.clear()
             return
 
         if not isinstance(layername, str):
             layername, aka = layername
         else:
             aka = layername
-        if aka in self._ablation:
-            del self._ablation[aka]
-        if aka in self._replacement:
-            del self._replacement[aka]
+        if aka in self._editargs:
+            del self._editargs[aka]
+        if aka in self._editrule:
+            del self._editrule[aka]
 
     def add_hooks(self, layernames):
         '''
@@ -174,6 +195,12 @@ class InstrumentedModel(torch.nn.Module):
         if aka not in self._hooked_layer:
             return
         layername = self._hooked_layer[aka]
+        # Remove any retained data and any edit rules
+        if aka in self._retained:
+            del self._retained[aka]
+            del self._detach_retained[aka]
+        self.remove_edits(aka)
+        # Restore the unhooked method for the layer
         layer, check, old_forward = self._old_forward[layername]
         assert check == aka
         if old_forward is None:
@@ -183,12 +210,6 @@ class InstrumentedModel(torch.nn.Module):
             layer.forward = old_forward
         del self._old_forward[layername]
         del self._hooked_layer[aka]
-        if aka in self._ablation:
-            del self._ablation[aka]
-        if aka in self._replacement:
-            del self._replacement[aka]
-        if aka in self._retained:
-            del self._retained[aka]
 
     def _postprocess_forward(self, x, aka):
         '''
@@ -196,15 +217,45 @@ class InstrumentedModel(torch.nn.Module):
         '''
         # Retain output before edits, if desired.
         if aka in self._retained:
-            self._retained[aka] = x.detach()
+            if self._detach_retained[aka]:
+                self._retained[aka] = x.detach()
+            else:
+                self._retained[aka] = x
         # Apply any edits requested.
-        a = make_matching_tensor(self._ablation, aka, x)
-        if a is not None:
-            x = x * (1 - a)
-            v = make_matching_tensor(self._replacement, aka, x)
-            if v is not None:
-                x += (v * a)
+        rule = self._editrule.get(aka, None)
+        if rule is not None:
+            x = rule(x, self, **(self._editargs[aka]))
         return x
+
+    def _hook_sequential(self):
+        '''
+        Replaces 'forward' of sequential with a version that takes
+        additional keyword arguments: layer allows a single layer to be run;
+        first_layer and last_layer allow a subsequence of layers to be run.
+        '''
+        model = self.model
+        self._hooked_layer['.'] = '.'
+        self._old_forward['.'] = (model, '.',
+                model.__dict__.get('forward', None))
+        def new_forward(this, x, layer=None, first_layer=None, last_layer=None):
+            assert layer is None or (first_layer is None and last_layer is None)
+            first_layer, last_layer = [str(layer) if layer is not None
+                    else str(d) if d is not None else None
+                    for d in [first_layer, last_layer]]
+            including_children = (first_layer is None)
+            for name, layer in this._modules.items():
+                if name == first_layer:
+                    first_layer = None
+                    including_children = True
+                if including_children:
+                    x = layer(x)
+                if name == last_layer:
+                    last_layer = None
+                    including_children = False
+            assert first_layer is None, '%s not found' % first_layer
+            assert last_layer is None, '%s not found' % last_layer
+            return x
+        model.forward = types.MethodType(new_forward, model)
 
     def close(self):
         '''
@@ -214,6 +265,16 @@ class InstrumentedModel(torch.nn.Module):
             self._unhook_layer(aka)
         assert len(self._old_forward) == 0
 
+def apply_ablation_replacement(x, imodel, **buffers):
+    if buffers is not None:
+        # Apply any edits requested.
+        a = make_matching_tensor(buffers, 'ablation', x)
+        if a is not None:
+            x = x * (1 - a)
+            v = make_matching_tensor(buffers, 'replacement', x)
+            if v is not None:
+                x += (v * a)
+    return x
 
 def make_matching_tensor(valuedict, name, data):
     '''
@@ -240,134 +301,34 @@ def make_matching_tensor(valuedict, name, data):
         valuedict[name] = v
     return v
 
-
-
-###
-# Older-style API below.
-# TODO: replace usage of the old API calls with the safer version above.
-###
-
-def retain_layer_output(dest, layer, name):
-    '''Callback function to keep a reference to a layer's output in a dict.'''
-    dest[name] = None
-    def hook_fn(m, i, output):
-        dest[name] = output.detach()
-    layer.register_forward_hook(hook_fn)
-
-def retain_layers(model, layer_names):
+def subsequence(sequential, first_layer=None, last_layer=None,
+            share_weights=False):
     '''
-    Creates a 'retained' property on the model which will keep a record
-    of the layer outputs for the specified layers.  Also computes the
-    cumulative scale and offset for convolutions.
+    Creates a subsequence of a pytorch Sequential model, copying over
+    modules together with parameters for the subsequence.  Only
+    modules from first_layer to last_layer (inclusive) are included.
 
-    The layer_names array should be a list of layer names, or tuples
-    of (name, aka) where the name is the pytorch name for the layer,
-    and the aka string is the name you wish to use for the dissection.
+    If share_weights is True, then references the original modules
+    and their parameters without copying them.  Otherwise, by default,
+    makes a separate brand-new copy.
     '''
-    model.retained = {}
-    seen = set()
-    sequence = []
-    aka_map = {}
-    for name in layer_names:
-        aka = name
-        if not isinstance(aka, str):
-            name, aka = name
-        aka_map[name] = aka
-    for name, layer in model.named_modules():
-        sequence.append(layer)
-        if name in aka_map:
-            seen.add(name)
-            aka = aka_map[name]
-            retain_layer_output(model.retained, layer, aka)
-    for name in aka_map:
-        assert name in seen, ('Layer %s not found' % name)
+    included_children = OrderedDict()
+    including_children = (first_layer is None)
+    for name, layer in sequential._modules.items():
+        if name == first_layer:
+            first_layer = None
+            including_children = True
+        if including_children:
+            included_children[name] = layer if share_weights else (
+                    copy.deepcopy(layer))
+        if name == last_layer:
+            last_layer = None
+            including_children = False
+    if first_layer is not None:
+        raise ValueError('Layer %s not found' % first_layer)
+    if last_layer is not None:
+        raise ValueError('Layer %s not found' % last_layer)
+    if not len(included_children):
+        raise ValueError('Empty subsequence')
+    return torch.nn.Sequential(OrderedDict(included_children))
 
-def edit_layer_output(alpha, value, layer, name):
-    '''
-    Overrides the forward method of the given layer, to replace the
-    output with a convex combination of the output and the given value,
-    as specified by the alpha mask.
-    '''
-    original_forward = layer.forward
-    alpha[name] = None
-    value[name] = None
-    def new_forward(self, *inputs, **kwargs):
-        original_x = original_forward(*inputs, **kwargs)
-        x = original_x
-        a = get_and_match_shape(alpha, name, x)
-        v = get_and_match_shape(value, name, x)
-        if a is not None:
-            x = x * (1 - a)
-            if v is not None:
-                x += (v * a)
-        return x
-    layer.forward = types.MethodType(new_forward, layer)
-
-def get_and_match_shape(valuedict, name, data):
-    v = valuedict.get(name, None)
-    if v is None:
-        return None
-    if not isinstance(v, torch.Tensor):
-        # Accept non-torch data.
-        v = torch.from_numpy(numpy.array(v))
-        valuedict[name] = v
-    if not v.device == data.device or not v.dtype == data.dtype:
-        # Ensure device and type matches.
-        assert not v.requires_grad, '%s wrong device or type' % (name)
-        v = v.to(device=data.device, dtype=data.dtype)
-        valuedict[name] = v
-    if len(v.shape) < len(data.shape):
-        # Ensure dimensions are unsqueezed as needed.
-        assert not v.requires_grad, '%s wrong dimensions' % (name)
-        v = v.view((1,) + tuple(v.shape) + (1,) * (3 - len(v.shape)))
-        valuedict[name] = v
-    if v.shape[1] < data.shape[1] and v.shape[1] > 1:
-        # For the convenience of the caller, we will pad the
-        # channel dimension with zeros if needed.
-        v = torch.zeros((v.shape[0], data.shape[1],) + v.shape[2:],
-                dtype=v.dtype, device=v.device)
-        v[:, :v.shape[1]] = v
-    if v.shape[2:] != data.shape[2:] and (v.shape[2] * v.shape[3] != 1):
-        # Ensure shape is broadcastable.
-        assert not v.requires_grad, '%s wrong shape' % (name)
-        with torch.no_grad():
-            v = torch.nn.functional.adaptive_max_pool2d(
-                    v, (data.shape[2], data.shape[3]))
-        valuedict[name] = v
-    return v
-
-def edit_layers(model, layer_names):
-    '''
-    Creates 'ablation' and 'replacement' properties on the model.
-    The output of each layer is replaced by the convex combination
-    of the actual output and the given replacement, where the weighting
-    is given by the ablation mask (one for a full replacement, zero
-    for the full original).  If the replacement is not given, it is
-    assumed to be zero.
-
-    The dimensions of ablation and replacement should match those of
-    the layer that is being edited (channel, y, x).  If the channels
-    are right but the dimensions do not match, the values will be
-    resized via max pooling before being applied.
-    '''
-    model.ablation = {}
-    model.replacement = {}
-    seen = set()
-    aka_map = {}
-    for name in layer_names:
-        aka = name
-        if not isinstance(aka, str):
-            name, aka = name
-        aka_map[name] = aka
-    for name, layer in model.named_modules():
-        if name in aka_map:
-            seen.add(name)
-            aka = aka_map[name]
-            edit_layer_output(model.ablation, model.replacement, layer, aka)
-    for name in aka_map:
-        assert name in seen, ('Layer %s not found' % name)
-
-def clear_edit(model):
-    for layer in model.ablation:
-        model.ablation[layer] = None
-        model.replacement[layer] = None
