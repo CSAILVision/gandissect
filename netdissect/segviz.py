@@ -1,6 +1,10 @@
 import numpy, scipy
 
-def segment_visualization(seg, size):
+def segment_visualization(seg, size=None):
+    # Handle both 2d tensor (single label segmentation) and 3d tensor
+    # (multilabel segmentation)
+    if len(seg.shape) == 2:
+        seg = seg[None,:,:]
     result = numpy.zeros((seg.shape[1] * seg.shape[2], 3), dtype=numpy.uint8)
     flatseg = seg.reshape(seg.shape[0], seg.shape[1] * seg.shape[2])
     bc = numpy.bincount(flatseg.flatten())
@@ -15,7 +19,7 @@ def segment_visualization(seg, size):
         bitmap = ((flatseg == label).sum(axis=0) > 0)
         result[bitmap] = high_contrast_arr[label % len(high_contrast_arr)]
     result = result.reshape((seg.shape[1], seg.shape[2], 3))
-    if seg.shape[1:] != size:
+    if size is not None:
         result = scipy.misc.imresize(result, size, interp='nearest')
     return result
 
