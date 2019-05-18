@@ -1,4 +1,21 @@
-import numpy, scipy
+import numpy, scipy, PIL, torch
+
+def seg_as_image(seg, size=None):
+    return PIL.Image.fromarray(
+            segment_visualization(seg.cpu().numpy(), size=size))
+
+def swatch_image(label, size=15):
+    return PIL.Image.new("RGB", (size, size), tuple(high_contrast[label]))
+
+def segment_key(seg, segmodel, max_labels=6):
+    seglabels, _ = segmodel.get_label_and_category_names()
+    bc = torch.bincount(seg.view(-1)).cpu()
+    result = []
+    for ind in bc.sort()[1].flip(0):
+        if len(result) >= max_labels or bc[ind].item() == 0:
+            break
+        result.append((swatch_image(ind), seglabels[ind][0]))
+    return result
 
 def segment_visualization(seg, size=None):
     # Handle both 2d tensor (single label segmentation) and 3d tensor
