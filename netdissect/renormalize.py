@@ -1,5 +1,15 @@
-import numpy, torch
+import numpy, torch, PIL
 from torchvision import transforms
+
+def as_tensor(data, source=None, mode='zc'):
+    renorm = renormalizer(source=source, mode=mode)
+    return renorm(data)
+
+def as_image(data, source='zc', mode='byte'):
+    assert len(data.shape) == 3
+    renorm = renormalizer(source=source, mode=mode)
+    return PIL.Image.fromarray(renorm(data).
+            permute(1,2,0).clamp(0, 255).byte().cpu().numpy())
 
 def renormalizer(source=None, mode='zc'):
     '''
@@ -18,10 +28,13 @@ def renormalizer(source=None, mode='zc'):
     imposing the specified normalization.  When no source is provided,
     the input data is assumed to be pytorch-normalized (range [0..1]).
     '''
-    normalizer = find_normalizer(source)
-    oldoffset, oldscale = (
-            (normalizer.mean, normalizer.std) if normalizer is not None
-            else OFFSET_SCALE['pt'])
+    if isinstance(source, str):
+        oldoffset, oldscale = OFFSET_SCALE[source]
+    else:
+        normalizer = find_normalizer(source)
+        oldoffset, oldscale = (
+                (normalizer.mean, normalizer.std) if normalizer is not None
+                else OFFSET_SCALE['pt'])
     newoffset, newscale = (mode if isinstance(mode, tuple)
             else OFFSET_SCALE[mode])
     return Renormalizer(oldoffset, oldscale, newoffset, newscale)
@@ -32,6 +45,8 @@ OFFSET_SCALE=dict(
             zc=([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]),
             imagenet=([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
             byte=([0.0, 0.0, 0.0], [1.0/255, 1.0/255, 1.0/255]))
+
+NORMALIZER={k: transforms.Normalize(*OFFSET_SCALE[k]) for k in OFFSET_SCALE}
 
 def find_normalizer(source=None):
     '''
