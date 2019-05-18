@@ -570,6 +570,70 @@ class RunningConditionalQuantile:
     # iou = isects / unions
 
 
+class RunningVariance:
+    '''
+    Running computation of mean and variance. Use this when you just need
+    basic stats without covariance.
+    '''
+    def __init__(self, state=None):
+        if state is not None:
+            self.set_state_dict(state)
+            return
+        self.count = 0
+        self._mean = None
+        self.v_cmom2 = None
+
+    def add(self, a):
+        if len(a.shape) == 1:
+            a = a[None, :]
+        if len(a.shape) > 2:
+            a = (a.view(a.shape[0], a.shape[1], -1).permute(0, 2, 1)
+                    .contiguous().view(-1, a.shape[1]))
+        batch_count = a.shape[0]
+        batch_mean = a.sum(0) / batch_count
+        centered = a - batch_mean
+        # Initial batch.
+        if self._mean is None:
+            self.count = batch_count
+            self._mean = batch_mean
+            self.v_cmom2 = centered.pow(2).sum(0)
+            return
+        # Update a batch using Chan-style update for numerical stability.
+        oldcount = self.count
+        self.count += batch_count
+        new_frac = float(batch_count) / self.count
+        # Update the mean according to the batch deviation from the old mean.
+        delta = batch_mean.sub_(self._mean).mul_(new_frac)
+        self._mean.add_(delta)
+        # Update the variance using the batch deviation
+        self.v_cmom2.add_(centered.pow(2).sum(0))
+        self.v_cmom2.add_(delta.pow_(2).mul_(new_frac * oldcount))
+
+    def mean(self):
+        return self._mean
+
+    def variance(self):
+        return self.v_cmom2 / (self.count - 1)
+
+    def stdev(self):
+        return v.sqrt()
+
+    def to_(self, device):
+        self._mean = self._mean.to(device)
+        self.v_cmom2 = self.v_cmom2.to(device)
+
+    def state_dict(self):
+        return dict(
+                constructor=self.__module__ + '.' +
+                    self.__class__.__name__ + '()',
+                count=self.count,
+                mean=self._mean.cpu().numpy(),
+                cmom2=self.v_cmom2.cpu().numpy())
+
+    def set_state_dict(self, dic):
+        self.count = dic['count'].item()
+        self._mean = torch.from_numpy(dic['mean'])
+        self.v_cmom2 = torch.from_numpy(dic['cmom2'])
 
 
 class RunningCrossCovariance:
