@@ -26,12 +26,25 @@ def conditional_samples(activations, segments):
                     activations_by_channel[mask].view(-1, channels))
     return sample_generator()
 
+def tally_quantile(compute, dataset, sample_size=None, batch_size=10,
+        resolution=2048):
+    loader = torch.utils.data.DataLoader(dataset,
+            sampler=sampler.FixedSubsetSampler(
+                list(range(sample_size))) if sample_size else None,
+            batch_size=batch_size)
+    rq = runningstats.RunningQuantile()
+    for batch in pbar(loader):
+        sample = compute(batch)
+        rq.add(sample)
+    rq.to_('cpu')
+    return rq
+
 def tally_conditional_quantile(compute, dataset,
-        sample_size=None, batch_size=50, gpu_cache=64, resolution=2048):
-    samp = (sampler.FixedSubsetSampler(list(range(sample_size))) if sample_size
-            else None)
-    loader = torch.utils.data.DataLoader(
-            dataset, sampler=samp, batch_size=batch_size)
+        sample_size=None, batch_size=1, gpu_cache=64, resolution=2048):
+    loader = torch.utils.data.DataLoader(dataset,
+            sampler=sampler.FixedSubsetSampler(
+                list(range(sample_size))) if sample_size else None,
+            batch_size=batch_size)
     cq = runningstats.RunningConditionalQuantile(resolution=resolution)
     most_common_conditions = set()
     for i, batch in enumerate(pbar(loader)):
