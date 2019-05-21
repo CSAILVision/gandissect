@@ -507,6 +507,9 @@ class RunningConditionalQuantile:
     def conditional(self, c):
         return self.running_quantiles[c]
 
+    def has_conditional(self, c):
+        return c in self.running_quantiles
+
     def collected_quantiles(self, conditions, quantiles, old_style=False):
         result = torch.zeros(
                 size=(len(conditions), self.first_rq.depth, len(quantiles)),
