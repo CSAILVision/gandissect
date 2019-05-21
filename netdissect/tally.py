@@ -26,8 +26,31 @@ def conditional_samples(activations, segments):
                     activations_by_channel[mask].view(-1, channels))
     return sample_generator()
 
+def tally_topk(compute, dataset, sample_size=None, batch_size=10, k=100):
+    '''
+    Pass a batch stats computation function and a dataset, and will
+    tally up the top k for each.
+    '''
+    loader = torch.utils.data.DataLoader(dataset,
+            sampler=sampler.FixedSubsetSampler(
+                list(range(sample_size))) if sample_size else None,
+            batch_size=batch_size)
+    rtk = runningstats.RunningTopK(k=k)
+    for batch in pbar(loader):
+        sample = compute(batch)
+        rtk.add(sample)
+    rtk.to_('cpu')
+    return rtk
+
 def tally_quantile(compute, dataset, sample_size=None, batch_size=10,
         resolution=2048):
+    '''
+    Pass a batch stats computation function and a dataset, and will
+    tally up estimated quantile stats for each of the computed features.
+
+    The compute function should take a batch (as returned by a dataloder)
+    and return a 2d tensor with axes (samplesize, featurenum).
+    '''
     loader = torch.utils.data.DataLoader(dataset,
             sampler=sampler.FixedSubsetSampler(
                 list(range(sample_size))) if sample_size else None,
@@ -41,6 +64,17 @@ def tally_quantile(compute, dataset, sample_size=None, batch_size=10,
 
 def tally_conditional_quantile(compute, dataset,
         sample_size=None, batch_size=1, gpu_cache=64, resolution=2048):
+    '''
+    Pass a batch stats computation function and a dataset, and will
+    tally up estimated conditional quantile stats for each of the
+    computed features, over all of the supplied conditions.
+
+    The compute function should take a batch (as returned by a dataloder)
+    and return a generator that returns an iteration over
+    (condition, 2d-tensor) pairs, where condition is an arbitrary hashable
+    indicating the condition being tested, and the tensor tensor contains
+    features with axes (samplesize, featurenum).
+    '''
     loader = torch.utils.data.DataLoader(dataset,
             sampler=sampler.FixedSubsetSampler(
                 list(range(sample_size))) if sample_size else None,
