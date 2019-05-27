@@ -160,16 +160,6 @@ def zoom_image(img, source_rect=None, target_shape=None):
     assert target.shape[:2] == target_shape, (target.shape, target_shape)
     return target
 
-def scale_offset(dilations):
-    if len(dilations) == 0:
-        return (1, 0)
-    scale, offset = scale_offset(dilations[1:])
-    kernel, stride, padding = dilations[0]
-    scale *= stride
-    offset *= stride
-    offset += (kernel - 1) / 2.0 - padding
-    return scale, offset
-
 def choose_level(feature_map, percentile=0.8):
     '''
     Chooses the top 80% level (or whatever the level chosen).
@@ -177,19 +167,4 @@ def choose_level(feature_map, percentile=0.8):
     data_range = numpy.sort(feature_map.flatten())
     return numpy.interp(
             percentile, numpy.linspace(0, 1, len(data_range)), data_range)
-
-def dilations(modulelist):
-    result = []
-    for module in modulelist:
-        settings = tuple(getattr(module, n, d)
-            for n, d in (('kernel_size', 1), ('stride', 1), ('padding', 0)))
-        settings = (((s, s) if not isinstance(s, tuple) else s)
-            for s in settings)
-        if settings != ((1, 1), (1, 1), (0, 0)):
-            result.append(zip(*settings))
-    return zip(*result)
-
-def grid_scale_offset(modulelist):
-    '''Returns (yscale, yoffset), (xscale, xoffset) given a list of modules'''
-    return tuple(scale_offset(d) for d in dilations(modulelist))
 
