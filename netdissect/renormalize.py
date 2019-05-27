@@ -9,7 +9,7 @@ def as_image(data, source='zc', mode='byte'):
     assert len(data.shape) == 3
     renorm = renormalizer(source=source, mode=mode)
     return PIL.Image.fromarray(renorm(data).
-            permute(1,2,0).clamp(0, 255).byte().cpu().numpy())
+            permute(1,2,0).cpu().numpy())
 
 def renormalizer(source=None, mode='zc'):
     '''
@@ -37,7 +37,8 @@ def renormalizer(source=None, mode='zc'):
                 else OFFSET_SCALE['pt'])
     newoffset, newscale = (mode if isinstance(mode, tuple)
             else OFFSET_SCALE[mode])
-    return Renormalizer(oldoffset, oldscale, newoffset, newscale)
+    return Renormalizer(oldoffset, oldscale, newoffset, newscale,
+            tobyte=(mode == 'byte'))
 
 # The three commonly-seed image normalization schemes.
 OFFSET_SCALE=dict(
@@ -69,12 +70,13 @@ def find_normalizer(source=None):
     return None
 
 class Renormalizer:
-    def __init__(self, oldoffset, oldscale, newoffset, newscale):
+    def __init__(self, oldoffset, oldscale, newoffset, newscale, tobyte=False):
         self.mul = torch.from_numpy(
                 numpy.array(oldscale) / numpy.array(newscale))
         self.add = torch.from_numpy(
                 (numpy.array(oldoffset) - numpy.array(newoffset))
                 / numpy.array(newscale))
+        self.tobyte = tobyte
         # Store these away to allow the data to be renormalized again
         self.mean = newoffset
         self.std = newscale
@@ -85,4 +87,7 @@ class Renormalizer:
             mul, add = [d[:, None, None] for d in [mul, add]]
         elif data.ndimension() == 4:
             mul, add = [d[None, :, None, None] for d in [mul, add]]
-        return data.mul(mul).add_(add)
+        result = data.mul(mul).add_(add)
+        if self.tobyte:
+            result = result.clamp(0, 255).byte()
+        return result
