@@ -1,18 +1,18 @@
 import torch
 
-def upsampler(target_shape, data_shape, input_shape=None, scale_offset=None,
+def upsampler(target_shape, data_shape, image_size=None, scale_offset=None,
         convolutions=None, dtype=torch.float, device=None):
     '''
     Returns a function that will upsample a batch of torch data from the
     expected data_shape to the specified target_shape. Can use scale_offset
-    and input_shape to center the grid in a nondefault way: scale_offset
-    maps feature pixels to input_shape pixels, and it is assumed that
-    the target_shape is a uniform downsampling of input_shape.
+    and image_size to center the grid in a nondefault way: scale_offset
+    maps feature pixels to image_size pixels, and it is assumed that
+    the target_shape is a uniform downsampling of image_size.
     '''
     if convolutions is not None:
         assert scale_offset is None
         scale_offset = sequence_scale_offset(convolutions)
-    grid = upsample_grid(data_shape, target_shape, input_shape, scale_offset,
+    grid = upsample_grid(data_shape, target_shape, image_size, scale_offset,
             dtype, device)
     batch_grid = grid
     # padding mode could be 'border'
@@ -100,13 +100,13 @@ def convconfigs(modulelist):
             result.append(zip(*settings))
     return list(zip(*result))
 
-def upsample_grid(data_shape, target_shape, input_shape=None,
+def upsample_grid(data_shape, target_shape, image_size=None,
         scale_offset=None, dtype=torch.float, device=None):
     '''Prepares a grid to use with grid_sample to upsample a batch of
     features in data_shape to the target_shape. Can use scale_offset
-    and input_shape to center the grid in a nondefault way: scale_offset
-    maps feature pixels to input_shape pixels, and it is assumed that
-    the target_shape is a uniform downsampling of input_shape.'''
+    and image_size to center the grid in a nondefault way: scale_offset
+    maps feature pixels to image_size pixels, and it is assumed that
+    the target_shape is a uniform downsampling of image_size.'''
     # Default is that nothing is resized.
     if target_shape is None:
         target_shape = data_shape
@@ -114,15 +114,15 @@ def upsample_grid(data_shape, target_shape, input_shape=None,
     if scale_offset is None:
         scale = tuple(float(ts) / ds
                 for ts, ds in zip(target_shape, data_shape))
-        offset = tuple(0.0 for s in scale)
+        offset = tuple(0.5 * s - 0.5 for s in scale)
     else:
         scale, offset = (v for v in zip(*scale_offset))
         # Handle downsampling for different input vs target shape.
-        if input_shape is not None:
+        if image_size is not None:
             scale = tuple(s * (ts - 1) / (ns - 1)
-                    for s, ns, ts in zip(scale, input_shape, target_shape))
+                    for s, ns, ts in zip(scale, image_size, target_shape))
             offset = tuple(o * (ts - 1) / (ns - 1)
-                    for o, ns, ts in zip(offset, input_shape, target_shape))
+                    for o, ns, ts in zip(offset, image_size, target_shape))
     # Pytorch needs target coordinates in terms of source coordinates [-1..1]
     ty, tx = (((torch.arange(ts, dtype=dtype, device=device) - o)
                   * (2 / (s * (ss - 1))) - 1)
