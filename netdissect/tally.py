@@ -91,10 +91,10 @@ def tally_conditional_quantile(compute, dataset,
         # Move uncommon conditions off the GPU.
         if i and not i & (i - 1):  # if i is a power of 2:
             common_conditions = set(cq.most_common_conditions(gpu_cache))
-            cq.to_('cpu', [k for k in cq.running_quantiles.keys()
+            cq.to_('cpu', [k for k in cq.keys()
                     if k not in common_conditions])
     # At the end, move all to the CPU
-    cq.to_('cpu', cq.running_quantiles.keys())
+    cq.to_('cpu')
     return cq
 
 def tally_variance(compute, dataset, sample_size=None, batch_size=10):
@@ -137,5 +137,5 @@ def tally_conditional_variance(compute, dataset,
             # Move uncommon conditional data to the cpu before collating.
             cv.add(cond, sample)
     # At the end, move all to the CPU
-    cv.to_('cpu', cv.running_var.keys())
+    cv.to_('cpu')
     return cv

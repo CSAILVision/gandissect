@@ -504,6 +504,9 @@ class RunningConditionalQuantile:
         for c in conditions:
             self.add(c, incoming)
 
+    def keys(self):
+        return self.running_quantiles.keys()
+
     def conditional(self, c):
         return self.running_quantiles[c]
 
@@ -533,7 +536,7 @@ class RunningConditionalQuantile:
 
     def to_(self, device, conditions=None):
         if conditions is None:
-            conditions = self.running_quantiles.keys()
+            conditions = self.keys()
         for cond in conditions:
             if cond in self.running_quantiles:
                 self.running_quantiles[cond].to_(device)
@@ -656,6 +659,9 @@ class RunningConditionalVariance:
         for c in conditions:
             self.add(c, incoming)
 
+    def keys(self):
+        return self.running_var.keys()
+
     def conditional(self, c):
         return self.running_var[c]
 
@@ -664,9 +670,9 @@ class RunningConditionalVariance:
 
     def to_(self, device, conditions=None):
         if conditions is None:
-            conditions = self.running_quantiles.keys()
+            conditions = self.keys()
         for cond in conditions:
-            if cond in self.running_quantiles:
+            if cond in self.running_var:
                 self.running_var[cond].to_(device)
 
     def state_dict(self):
