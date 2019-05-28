@@ -639,6 +639,59 @@ class RunningVariance:
         self.v_cmom2 = torch.from_numpy(dic['cmom2'])
 
 
+class RunningConditionalVariance:
+    def __init__(self, state=None):
+        self.running_var = {}
+        if state is not None:
+            self.set_state_dict(state)
+            return
+
+    def add(self, condition, incoming):
+        if condition not in self.running_var:
+            self.running_var[condition] = RunningVariance()
+        rv = self.running_var[condition]
+        rv.add(incoming)
+
+    def collected_add(self, conditions, incoming):
+        for c in conditions:
+            self.add(c, incoming)
+
+    def conditional(self, c):
+        return self.running_var[c]
+
+    def has_conditional(self, c):
+        return c in self.running_var
+
+    def to_(self, device, conditions=None):
+        if conditions is None:
+            conditions = self.running_quantiles.keys()
+        for cond in conditions:
+            if cond in self.running_quantiles:
+                self.running_var[cond].to_(device)
+
+    def state_dict(self):
+        conditions = sorted(self.running_var.keys())
+        result = dict(
+                constructor=self.__module__ + '.' +
+                    self.__class__.__name__ + '()',
+                conditions=conditions)
+        for i, c in enumerate(conditions):
+            result.update({
+                '%d.%s' % (i, k): v
+                for k, v in self.running_var[c].state_dict().items()})
+        return result
+
+    def set_state_dict(self, dic):
+        conditions = list(dic['conditions'])
+        subdicts = defaultdict(dict)
+        for k, v in dic.items():
+            if '.' in k:
+                p, s = k.split('.', 1)
+                subdicts[p][s] = v
+        self.running_var = {
+                c: RunningVariance(state=subdicts[str(i)])
+                for i, c in enumerate(conditions)}
+
 class RunningCrossCovariance:
     '''
     Running computation. Use this when an off-diagonal block of the
