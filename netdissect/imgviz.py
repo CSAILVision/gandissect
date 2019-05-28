@@ -46,7 +46,7 @@ class ImageVisualizer:
         else:
             a = activations[unit]
         upsampler = self.upsampler_for(a)
-        a = upsampler(a[None,None,...], mode=mode)[0,0]
+        a = upsampler(a[None,None,...], mode=mode)[0,0].cpu()
         return PIL.Image.fromarray(
                 (cm.hot((a - amin) / (1e-10 + amax - amin)) * 255
                     ).astype('uint8'))
@@ -55,11 +55,12 @@ class ImageVisualizer:
         # returns a color-coded segmentation
         pass
 
+    def image(self, imagedata):
+        return PIL.Image.fromarray(self.scaled_image(imagedata)
+                .permute(1, 2, 0).byte().cpu().numpy())
+
     def masked_image(self, imagedata, activations, unit=None):
-        renormalizer = self.renormalizer_for(imagedata)
-        scaled_image = torch.nn.functional.interpolate(
-                renormalizer(imagedata).float()[None,...],
-                size=self.size)[0]
+        scaled_image = self.scaled_image(imagedata).float()
         mask = self.pytorch_mask(activations, unit)
         border = border_from_mask(mask)
         inside = mask & (~border)
@@ -86,6 +87,14 @@ class ImageVisualizer:
         level = self.level_for(activations, unit)
         upsampler = self.upsampler_for(a)
         return (upsampler(a[None, None,...])[0,0] > level)
+
+    def scaled_image(self, imagedata):
+        if len(imagedata.shape) == 4:
+            imagedata = imagedata[0]
+        renormalizer = self.renormalizer_for(imagedata)
+        return torch.nn.functional.interpolate(
+                renormalizer(imagedata).float()[None,...],
+                size=self.size)[0]
 
     def upsampler_for(self, a):
         if self.upsampler is not None:
