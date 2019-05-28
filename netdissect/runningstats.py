@@ -896,6 +896,62 @@ class RunningCovariance:
         self._mean = torch.from_numpy(dic['mean'])
         self.cmom2 = torch.from_numpy(dic['cmom2'])
 
+class RunningBincount:
+    '''
+    Running bincount.  The counted array should be an integer type with
+    non-negative integers.  Also
+    '''
+    def __init__(self, state=None):
+        if state is not None:
+            self.set_state_dict(state)
+            return
+        self.count = 0
+        self._bincount = None
+
+    def add(self, a, size=None):
+        a = a.view(-1)
+        bincount = a.bincount()
+        if self._bincount is None:
+            self._bincount = bincount
+        elif len(self._bincount) < len(bincount):
+            bincount[:len(self._bincount)] += self._bincount
+            self._bincount = bincount
+        else:
+            self._bincount[:len(bincount)] += bincount
+        if size is None:
+            self.count += len(a)
+        else:
+            self.count += size
+
+    def cpu_(self):
+        self._bincount = self._bincount.cpu()
+
+    def cuda_(self):
+        self._bincount = self._bincount.cuda()
+
+    def to_(self, device):
+        self._bincount = self._bincount.to(device)
+
+    def size(self):
+        return self.count
+
+    def mean(self):
+        return (self._bincount).float() / self.count
+
+    def bincount(self):
+        return self._bincount
+
+    def state_dict(self):
+        return dict(
+                constructor=self.__module__ + '.' +
+                    self.__class__.__name__ + '()',
+                count=self.count,
+                bincount=self._bincount.cpu().numpy())
+
+    def set_state_dict(self, dic):
+        self.count = dic['count'].item()
+        self._bincount = torch.from_numpy(dic['bincount'])
+
 def progress_addbmm(accum, x, y, batch_size):
     '''
     Break up very large adbmm operations into batches so progress can be seen.

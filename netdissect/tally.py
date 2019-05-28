@@ -139,3 +139,26 @@ def tally_conditional_variance(compute, dataset,
     # At the end, move all to the CPU
     cv.to_('cpu')
     return cv
+
+def tally_bincount(compute, dataset, sample_size=None, batch_size=10,
+        multi_label_axis=None):
+    '''
+    Pass a batch stats computation function and a dataset, and will
+    tally up the top k for each.
+    '''
+    loader = torch.utils.data.DataLoader(dataset,
+            sampler=sampler.FixedSubsetSampler(
+                list(range(sample_size))) if sample_size else None,
+            batch_size=batch_size)
+    rbc = runningstats.RunningBincount()
+    for batch in pbar(loader):
+        sample = compute(batch)
+        if multi_label_axis:
+            multilabel = sample.shape[multi_label_axis]
+            size = sample.numel() // multilabel
+        else:
+            size = None
+        rbc.add(sample, size=size)
+    rbc.to_('cpu')
+    return rbc
+
