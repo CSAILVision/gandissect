@@ -66,6 +66,9 @@ class RunningTopK:
         self.next += sk
         self.count += size
 
+    def size(self):
+        return self.count
+
     def result(self, sorted=True, flat=False):
         '''
         Returns top k data items and indexes in each dimension,
@@ -154,7 +157,10 @@ class RunningQuantile:
         self.randbits = torch.ByteTensor(resolution)
         self.currentbit = len(self.randbits) - 1
         self.extremes = None
-        self.size = 0
+        self.count = 0
+
+    def size(self):
+        return self.count
 
     def _lazy_init(self, incoming):
         self.depth = incoming.shape[1]
@@ -183,7 +189,7 @@ class RunningQuantile:
             self._lazy_init(incoming)
         assert len(incoming.shape) == 2
         assert incoming.shape[1] == self.depth, (incoming.shape[1], self.depth)
-        self.size += incoming.shape[0]
+        self.count += incoming.shape[0]
         # Convert to a flat torch array.
         if self.samplerate >= 1.0:
             self._add_every(incoming)
@@ -274,7 +280,7 @@ class RunningQuantile:
                     for d, f in zip(self.data, self.firstfree)],
                 sizes=[d.shape[1] for d in self.data],
                 extremes=self.extremes.cpu().numpy(),
-                size=self.size)
+                size=self.count)
 
     def set_state_dict(self, dic):
         self.resolution = int(dic['resolution'])
@@ -293,7 +299,7 @@ class RunningQuantile:
         self.firstfree = firstfree
         self.data = buffers
         self.extremes = torch.from_numpy((dic['extremes']))
-        self.size = int(dic['size'])
+        self.count = int(dic['size'])
         self.dtype = self.extremes.dtype
         self.device = self.extremes.device
 
@@ -306,11 +312,11 @@ class RunningQuantile:
         return self.quantiles([0.5])[:,0]
 
     def mean(self):
-        return self.integrate(lambda x: x) / self.size
+        return self.integrate(lambda x: x) / self.count
 
     def variance(self):
         mean = self.mean()[:,None]
-        return self.integrate(lambda x: (x - mean).pow(2)) / (self.size - 1)
+        return self.integrate(lambda x: (x - mean).pow(2)) / (self.count - 1)
 
     def stdev(self):
         return self.variance().sqrt()
@@ -384,7 +390,7 @@ class RunningQuantile:
         return (summary, weights)
 
     def quantiles(self, quantiles, old_style=False):
-        if self.size == 0:
+        if self.count == 0:
             return torch.full((self.depth, len(quantiles)), torch.nan)
         summary, weights = self._weighted_summary()
         cumweights = torch.cumsum(weights, dim=-1) - weights / 2
@@ -436,7 +442,7 @@ class RunningQuantile:
         normalizes every channel to reflect quantile values,
         uniformly distributed, within [0, 1].
         '''
-        assert self.size > 0
+        assert self.count > 0
         assert data.shape[0] == self.depth
         summary, weights = self._weighted_summary()
         cumweights = torch.cumsum(weights, dim=-1) - weights / 2
@@ -586,6 +592,7 @@ class RunningVariance:
             self.set_state_dict(state)
             return
         self.count = 0
+        self.batchcount = 0
         self._mean = None
         self.v_cmom2 = None
 
@@ -598,6 +605,7 @@ class RunningVariance:
         batch_count = a.shape[0]
         batch_mean = a.sum(0) / batch_count
         centered = a - batch_mean
+        self.batchcount += 1
         # Initial batch.
         if self._mean is None:
             self.count = batch_count
@@ -615,6 +623,9 @@ class RunningVariance:
         self.v_cmom2.add_(centered.pow(2).sum(0))
         self.v_cmom2.add_(delta.pow_(2).mul_(new_frac * oldcount))
 
+    def size(self):
+        return self.count
+
     def mean(self):
         return self._mean
 
@@ -622,7 +633,7 @@ class RunningVariance:
         return self.v_cmom2 / (self.count - 1)
 
     def stdev(self):
-        return v.sqrt()
+        return self.variance().sqrt()
 
     def to_(self, device):
         self._mean = self._mean.to(device)
@@ -633,11 +644,13 @@ class RunningVariance:
                 constructor=self.__module__ + '.' +
                     self.__class__.__name__ + '()',
                 count=self.count,
+                batchcount=self.batchcount,
                 mean=self._mean.cpu().numpy(),
                 cmom2=self.v_cmom2.cpu().numpy())
 
     def set_state_dict(self, dic):
         self.count = dic['count'].item()
+        self.batchcount = dic['batchcount'].item()
         self._mean = torch.from_numpy(dic['mean'])
         self.v_cmom2 = torch.from_numpy(dic['cmom2'])
 
