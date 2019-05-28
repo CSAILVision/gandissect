@@ -1,6 +1,6 @@
 import torch
 
-def upsampler(data_shape, target_shape, input_shape=None, scale_offset=None,
+def upsampler(target_shape, data_shape, input_shape=None, scale_offset=None,
         convolutions=None, dtype=torch.float, device=None):
     '''
     Returns a function that will upsample a batch of torch data from the

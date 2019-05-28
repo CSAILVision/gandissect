@@ -35,7 +35,7 @@ class ImageVisualizer:
         self.actrange = actrange
         self.upsampler = None
         if self.data_size is not None:
-            self.upsampler = upsample.upsampler(data_size, size,
+            self.upsampler = upsample.upsampler(size, data_size,
                     input_shape=self.input_size,
                     scale_offset=scale_offset)
 
