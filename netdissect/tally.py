@@ -96,3 +96,46 @@ def tally_conditional_quantile(compute, dataset,
     # At the end, move all to the CPU
     cq.to_('cpu', cq.running_quantiles.keys())
     return cq
+
+def tally_variance(compute, dataset, sample_size=None, batch_size=10):
+    '''
+    Pass a batch stats computation function and a dataset, and will
+    tally up estimated mean and variance for each of the computed features.
+    '''
+    loader = torch.utils.data.DataLoader(dataset,
+            sampler=sampler.FixedSubsetSampler(
+                list(range(sample_size))) if sample_size else None,
+            batch_size=batch_size)
+    rv = runningstats.RunningVariance()
+    for batch in pbar(loader):
+        sample = compute(batch)
+        rv.add(sample)
+    rv.to_('cpu')
+    return rq
+
+def tally_conditional_variance(compute, dataset,
+        sample_size=None, batch_size=1):
+    '''
+    Pass a batch stats computation function and a dataset, and will
+    tally up estimated conditional quantile stats for each of the
+    computed features, over all of the supplied conditions.
+
+    The compute function should take a batch (as returned by a dataloder)
+    and return a generator that returns an iteration over
+    (condition, 2d-tensor) pairs, where condition is an arbitrary hashable
+    indicating the condition being tested, and the tensor tensor contains
+    features with axes (samplesize, featurenum).
+    '''
+    loader = torch.utils.data.DataLoader(dataset,
+            sampler=sampler.FixedSubsetSampler(
+                list(range(sample_size))) if sample_size else None,
+            batch_size=batch_size)
+    cv = runningstats.RunningConditionalVariance()
+    for i, batch in enumerate(pbar(loader)):
+        sample_set = compute(batch)
+        for cond, sample in sample_set:
+            # Move uncommon conditional data to the cpu before collating.
+            cv.add(cond, sample)
+    # At the end, move all to the CPU
+    cv.to_('cpu', cv.running_var.keys())
+    return cv
