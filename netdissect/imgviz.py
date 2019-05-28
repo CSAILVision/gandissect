@@ -63,8 +63,8 @@ class ImageVisualizer:
         scaled_image = self.scaled_image(imagedata).float()
         mask = self.pytorch_mask(activations, unit)
         border = border_from_mask(mask)
-        inside = mask & (~border)
-        outside = ~mask & (~border)
+        inside = (mask & (~border))
+        outside = (~mask & (~border))
         inside, outside, border = [d.float() for d in [inside, outside, border]]
         yellow = torch.tensor([255.0, 255.0, 0],
                 dtype=border.dtype, device=border.device)[:,None,None]
@@ -99,7 +99,7 @@ class ImageVisualizer:
     def upsampler_for(self, a):
         if self.upsampler is not None:
             return self.upsampler
-        return upsample.upsampler(a.shape, self.size,
+        return upsample.upsampler(self.size, a.shape,
                     input_shape=self.input_size,
                     scale_offset=self.scale_offset,
                     dtype=a.dtype, device=a.device)
