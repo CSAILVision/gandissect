@@ -14,15 +14,16 @@ def upsampler(data_shape, target_shape, input_shape=None, scale_offset=None,
         scale_offset = sequence_scale_offset(convolutions)
     grid = upsample_grid(data_shape, target_shape, input_shape, scale_offset,
             dtype, device)
+    batch_grid = grid
     # padding mode could be 'border'
     def upsample_func(data, mode='bilinear', padding_mode='zeros'):
-        nonlocal grid
-        if data.device != grid.device:
-            grid = grid.to(data.device)
+        nonlocal grid, batch_grid
         # Use the same grid over the whole batch
-        if grid.shape[0] != data.shape[0]:
-            grid = grid.expand((data.shape[0],) + grid.shape[1:])
-        return torch.nn.functional.grid_sample(data, grid, mode=mode,
+        if batch_grid.shape[0] != data.shape[0]:
+            batch_grid = grid.expand((data.shape[0],) + grid.shape[1:])
+        if batch_grid.device != data.device:
+            batch_grid = batch_grid.to(data.device)
+        return torch.nn.functional.grid_sample(data, batch_grid, mode=mode,
                 padding_mode=padding_mode)
     return upsample_func
 
