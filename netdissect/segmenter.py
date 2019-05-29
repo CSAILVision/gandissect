@@ -97,6 +97,7 @@ class UnifiedParsingSegmenter(BaseSegmenter):
         segvocab = 'upp'
         segarch = ('resnet50', 'upernet')
         epoch = 40
+        ensure_upp_segmenter_downloaded('dataset/segmodel')
         segmodel = load_unified_parsing_segmentation_model(
                 segarch, segvocab, epoch)
         segmodel.cuda()
