@@ -106,7 +106,7 @@ def tally_variance(compute, dataset, sample_size=None, batch_size=10, **kwargs):
             sample = call_compute(compute, batch)
             rv.add(sample)
         rv.to_('cpu')
-        return rq
+        return rv
 
 def tally_conditional_variance(compute, dataset,
         sample_size=None, batch_size=1, **kwargs):

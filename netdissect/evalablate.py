@@ -230,19 +230,5 @@ def measure_ablation(segmenter, loader, model, classnum, layer, ordering):
         total_scores[1:] += scores
     return total_scores
 
-def count_segments(segmenter, loader, model):
-    total_bincount = 0
-    data_size = 0
-    progress = default_progress()
-    for i, batch in enumerate(progress(loader)):
-        tensor_images = model(z_batch.to(device))
-        seg = segmenter.segment_batch(tensor_images, downsample=2)
-        bc = (seg + index[:, None, None, None] * self.num_classes).view(-1
-                ).bincount(minlength=z_batch.shape[0] * self.num_classes)
-        data_size += seg.shape[0] * seg.shape[2] * seg.shape[3]
-        total_bincount += batch_label_counts.float().sum(0)
-    normalized_bincount = total_bincount / data_size
-    return normalized_bincount
-
 if __name__ == '__main__':
     main()

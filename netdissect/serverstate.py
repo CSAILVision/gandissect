@@ -327,7 +327,7 @@ class GanTester:
                         feature_stat[layer]['mean'] = mean_feature
                     else:
                         feature_stat[layer]['mean'] = (
-                                processed * feature_mean[layer]['mean']
+                                processed * feature_stat[layer]['mean']
                                 + processing * mean_feature) / (
                                         processed + processing)
                 processed += processing
@@ -376,9 +376,6 @@ def load_quantile_if_present(outdir, filename, device):
         result.to_(device)
         return result
     return None
-
-if __name__ == '__main__':
-    test_main()
 
 def mask_to_numpy(mask_record):
     # Detect a png image mask.

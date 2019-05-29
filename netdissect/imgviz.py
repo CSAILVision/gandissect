@@ -168,7 +168,7 @@ def find_sizer(source):
         return source
     t = getattr(source, 'transform', None)
     if t is not None:
-        return reverse_normalize_from_transform(t)
+        return find_sizer(t)
     ts = getattr(source, 'transforms', None)
     if ts is not None:
         for t in reversed(ts):

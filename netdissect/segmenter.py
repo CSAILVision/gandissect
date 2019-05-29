@@ -76,7 +76,7 @@ class NoSegmenter(BaseSegmenter):
                     tensor_images.shape[3] // downsample),
                 dtype=torch.uint8,
                 device=tensor_images.device)
-        return result, mask
+        return pred, mask
 
 class UnifiedParsingSegmenter(BaseSegmenter):
     '''

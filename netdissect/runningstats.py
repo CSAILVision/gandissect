@@ -518,7 +518,7 @@ class RunningConditionalQuantile:
         return self.running_quantiles.keys()
 
     def sizes(self):
-        return {k: self.running_quantiles[c].size() for k in self.keys()}
+        return {k: self.running_quantiles[k].size() for k in self.keys()}
 
     def conditional(self, c):
         return self.running_quantiles[c]

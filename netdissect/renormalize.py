@@ -60,7 +60,7 @@ def find_normalizer(source=None):
         return source
     t = getattr(source, 'transform', None)
     if t is not None:
-        return reverse_normalize_from_transform(t)
+        return find_normalizer(t)
     ts = getattr(source, 'transforms', None)
     if ts is not None:
         for t in reversed(ts):

@@ -166,13 +166,6 @@ class ModelBuilder():
                 inference=inference,
                 use_softmax=use_softmax,
                 fpn_dim=512)
-        elif arch == 'upernet_tmp':
-            net_decoder = UPerNetTmp(
-                num_class=num_class,
-                fc_dim=fc_dim,
-                inference=inference,
-                use_softmax=use_softmax,
-                fpn_dim=512)
         else:
             raise Exception('Architecture undefined!')
 
