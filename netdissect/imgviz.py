@@ -11,32 +11,34 @@ from matplotlib import cm
 #        negate=False, return_mask=False, **kwargs)
 
 class ImageVisualizer:
-    def __init__(self, size, input_size=None, data_size=None,
+    def __init__(self, size, image_size=None, data_size=None,
             renormalizer=None, scale_offset=None, level=None, actrange=None,
-            source=None, convolutions=None, quantiles=None):
-        if input_size is None and source is not None:
-            input_size = input_size_from_source(source)
+            source=None, convolutions=None, quantiles=None,
+            percent_level=None):
+        if image_size is None and source is not None:
+            image_size = image_size_from_source(source)
         if renormalizer is None and source is not None:
             renormalizer = renormalize.renormalizer(source=source, mode='byte')
         if scale_offset is None and convolutions is not None:
             scale_offset = upsample.sequence_scale_offset(convolutions)
         if data_size is None and convolutions is not None:
-            data_size = upsample.sequence_data_size(convolutions, input_size)
+            data_size = upsample.sequence_data_size(convolutions, image_size)
         if level is None and quantiles is not None:
-            level = quantiles.quantiles([0.99])[:,0]
+            level = quantiles.quantiles([percent_level or 0.95])[:,0]
         if actrange is None and quantiles is not None:
             actrange = quantiles.quantiles([0.01, 0.99])
         self.size = size
-        self.input_size = input_size
+        self.image_size = image_size
         self.data_size = data_size
         self.renormalizer = renormalizer
         self.scale_offset = scale_offset
+        self.percent_level = percent_level
         self.level = level
         self.actrange = actrange
         self.upsampler = None
         if self.data_size is not None:
             self.upsampler = upsample.upsampler(size, data_size,
-                    input_shape=self.input_size,
+                    image_size=self.image_size,
                     scale_offset=scale_offset)
 
     def heatmap(self, activations, unit=None, mode='bilinear'):
@@ -100,7 +102,7 @@ class ImageVisualizer:
         if self.upsampler is not None:
             return self.upsampler
         return upsample.upsampler(self.size, a.shape,
-                    input_shape=self.input_size,
+                    image_size=self.image_size,
                     scale_offset=self.scale_offset,
                     dtype=a.dtype, device=a.device)
 
@@ -108,21 +110,22 @@ class ImageVisualizer:
         if unit is not None and self.actrange is not None:
             if hasattr(unit, '__len__'):
                 unit = unit[1]
-            return self.actrange[unit]
+            return tuple(i.item() for i in self.actrange[unit])
         return activations.min(), activations.max()
 
     def level_for(self, activations, unit):
         if unit is not None and self.level is not None:
             if hasattr(unit, '__len__'):
                 unit = unit[1]
-            return self.level[unit]
+            return self.level[unit].item()
         s, _ = activations.view(-1).sort()
-        return s[int(len(s) * 0.99)]
+        percent_level = self.percent_level or 0.95
+        return s[int(len(s) * percent_level)]
 
     def renormalizer_for(self, image):
         if self.renormalizer is not None:
             return self.renormalizer
-        return renormalize.renormalizer('zc', 'rgb')
+        return renormalize.renormalizer('zc', 'byte')
 
 def border_from_mask(a):
     out = torch.zeros_like(a)
@@ -134,7 +137,7 @@ def border_from_mask(a):
     out[:,1:] |= v
     return out
 
-def input_size_from_source(source):
+def image_size_from_source(source):
     sizer = find_sizer(source)
     size = sizer.size
     if hasattr(size, '__len__'):
