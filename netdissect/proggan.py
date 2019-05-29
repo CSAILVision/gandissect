@@ -16,7 +16,9 @@ def from_pth_file(filename):
     '''
     Instantiate from a pth file.
     '''
-    state_dict = torch.load(filename)
+    return from_state_dict(torch.load(filename))
+
+def from_state_dict(state_dict):
     if 'state_dict' in state_dict:
         state_dict = state_dict['state_dict']
     # Convert old version of parameter names
