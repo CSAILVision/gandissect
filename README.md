@@ -52,12 +52,16 @@ and run:
 ```
 script/setup_env.sh      # Create a conda environment with dependencies
 script/make_dirs.sh      # Create the dataset and dissect directories
-script/download_data.sh  # Download support data and demo GANs
 source activate netd     # Enter the conda environment
 pip install -v -e .      # Link the local netdissect package into the env
 ```
 
-Details.  The code depends on python 3, Pytorch 4.1, and several other
+Optional (not needed for just running notebook examples).
+```
+script/download_data.sh  # Download support data and demo GANs
+```
+
+Details.  The code depends on python 3, Pytorch 1.1, and several other
 packages.  For conda users, `script/environment.yml` provides the details
 of the dependencies.  For pip users, `setup.py` lists everything needed.
 
@@ -68,6 +72,17 @@ the directories `dataset/` and `models/`.  If you do not wish to download
 the example networks, `python -m netdissect --download` will download
 just the data and models needed for netdissect itself.
 
+### Tutorial notebook introduction
+
+For a tutorial intorduction to GAN Dissect concept, set up the notebooks:
+
+```
+cd notebooks
+./setup_notebooks.sh
+jupyter notebook &
+```
+
+Then run the notebook `dissect_progan.ipynb`
 
 ### Dissecting a GAN
 
