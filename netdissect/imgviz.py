@@ -1,5 +1,5 @@
 import PIL, torch
-from netdissect import upsample, renormalize
+from netdissect import upsample, renormalize, segviz
 from torchvision import transforms
 from matplotlib import cm
 
@@ -27,6 +27,8 @@ class ImageVisualizer:
             level = quantiles.quantiles([percent_level or 0.95])[:,0]
         if actrange is None and quantiles is not None:
             actrange = quantiles.quantiles([0.01, 0.99])
+        if isinstance(size, int):
+            size = (size, size)
         self.size = size
         self.image_size = image_size
         self.data_size = data_size
@@ -54,8 +56,18 @@ class ImageVisualizer:
                     ).astype('uint8'))
 
     def segmentation(self, segmentations, label=None):
-        # returns a color-coded segmentation
-        pass
+        if label is not None:
+            segmentations = segmentations.clone()
+            segmentations[segmentations != label] = 0
+        return segviz.seg_as_image(segmentations, size=self.size)
+
+    def segment_key(self, segmentations, segmodel, num=None, label=None):
+        if label is not None:
+            segmentations = segmentations.clone()
+            segmentations[segmentations != label] = 0
+        if num is None:
+            num = self.size[0] // 17
+        return segviz.segment_key(segmentations, segmodel, num)
 
     def image(self, imagedata):
         return PIL.Image.fromarray(self.scaled_image(imagedata)
