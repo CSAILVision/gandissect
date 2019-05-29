@@ -9,6 +9,6 @@ git config filter.clean_ipynb.smudge cat
 git config filter.clean_ipynb.required true
 
 # Set up symlinks for the example notebooks
-ln -s ../dissect .
-ln -s ../models .
-ln -s ../dataset .
+ln -sfn ../dissect .
+ln -sfn ../models .
+ln -sfn ../dataset .
