@@ -9,13 +9,14 @@ dependencies:
   - python=3.6
   - cudatoolkit=9.0
   - cudnn=7.1.2
-  - pytorch=1.1
-  - torchvision=0.3
-  - connexion=1.5
-  - pyyaml=3.12
-  - scipy>=1.1.0
+  - pytorch>=1.1
+  - torchvision>=0.3
+  - connexion>=1.5
+  - pyyaml>=3.12
+  - pillow>=6.0.0
+  - scipy>=1.2.0
   - scikit-image>=0.14.0
-  - tqdm=4.24.0
+  - tqdm=4.32.1
   - flask-cors
   - jupyter
   - setuptools
