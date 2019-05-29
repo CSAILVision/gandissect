@@ -27,7 +27,7 @@ fi
 
 # If within the torralba lab NFS environment, set up dotconda directory.
 if [[ ! -e ${HOME}/.conda &&
-      -e /data/vision/torralba/scratch2 &&
+      -w /data/vision/torralba/scratch2 &&
       ! -e /data/vision/torralba/scratch2/${USER}/dotconda ]]
 then
     mkdir -p /data/vision/torralba/scratch2/${USER}/dotconda
