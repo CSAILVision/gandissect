@@ -31,3 +31,5 @@ fi
 fi
 
 done
+
+notebooks/setup_notebooks.sh
