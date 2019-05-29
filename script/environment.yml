@@ -9,8 +9,8 @@ dependencies:
   - python=3.6
   - cudatoolkit=9.0
   - cudnn=7.1.2
-  - pytorch=1.0
-  - torchvision=0.2.1
+  - pytorch=1.1
+  - torchvision=0.3
   - connexion=1.5
   - pyyaml=3.12
   - scipy>=1.1.0
