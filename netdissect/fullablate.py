@@ -1,8 +1,7 @@
 import torch, sys, os, argparse, textwrap, numbers, numpy, json, PIL
 from torchvision import transforms
 from torch.utils.data import TensorDataset
-from netdissect.progress import default_progress, post_progress, desc_progress
-from netdissect.progress import verbose_progress, print_progress
+from netdissect import pbar
 from netdissect.nethook import edit_layers
 from netdissect.zdataset import standard_z_sample
 from netdissect.autoeval import autoimport_eval
@@ -80,7 +79,7 @@ def main():
     args = parser.parse_args()
 
     # Set up console output
-    verbose_progress(not args.quiet)
+    pbar.verbose(not args.quiet)
 
     # Speed up pytorch
     torch.backends.cudnn.benchmark = True
@@ -148,7 +147,6 @@ def main():
         model.ablation[l] = None
 
     # For each sort-order, do an ablation
-    progress = default_progress()
     classname = args.classname
     classnum = labelnum_from_name[classname]
 
@@ -193,7 +191,6 @@ def measure_full_ablation(segmenter, loader, model, classnum, layer,
     '''
     Quick and easy counting of segmented pixels reduced by ablating units.
     '''
-    progress = default_progress()
     device = next(model.parameters()).device
     feature_units = model.feature_shape[layer][1]
     feature_shape = model.feature_shape[layer][2:]
@@ -204,9 +201,9 @@ def measure_full_ablation(segmenter, loader, model, classnum, layer,
     with torch.no_grad():
         for l in model.ablation:
             model.ablation[l] = None
-        for i, [ibz] in enumerate(progress(loader)):
+        for i, [ibz] in enumerate(pbar(loader)):
             ibz = ibz.cuda()
-            for num_units in progress(range(len(ordering) + 1)):
+            for num_units in pbar(range(len(ordering) + 1)):
                 ablation = torch.zeros(feature_units, device=device)
                 ablation[ordering[:num_units]] = torch.tensor(
                         values[:num_units]).to(ablation.device, ablation.dtype)

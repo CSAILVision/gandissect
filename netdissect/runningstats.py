@@ -963,11 +963,10 @@ def progress_addbmm(accum, x, y, batch_size):
     '''
     Break up very large adbmm operations into batches so progress can be seen.
     '''
-    from .progress import default_progress
+    from . import pbar
     if x.shape[0] <= batch_size:
         return accum.addbmm_(x, y)
-    progress = default_progress(None)
-    for i in progress(range(0, x.shape[0], batch_size), desc='bmm'):
+    for i in pbar(range(0, x.shape[0], batch_size), desc='bmm'):
         accum.addbmm_(x[i:i+batch_size], y[i:i+batch_size])
     return accum
 

@@ -12,12 +12,10 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 import matplotlib.gridspec as gridspec
 from scipy.ndimage.morphology import binary_dilation
-
+from netdissect import pbar
 import netdissect.zdataset
 import netdissect.nethook
 from netdissect.dissection import safe_dir_name
-from netdissect.progress import verbose_progress, default_progress
-from netdissect.progress import print_progress, desc_progress, post_progress
 from netdissect.easydict import EasyDict
 from netdissect.workerpool import WorkerPool, WorkerBase
 from netdissect.runningstats import RunningQuantile
@@ -71,8 +69,7 @@ def main():
     run_command(args)
 
 def run_command(args):
-    verbose_progress(True)
-    progress = default_progress()
+    pbar.verbose(True)
     classname = args.classname # 'door'
     layer = args.layer # 'layer4'
     num_eval_units = 20
@@ -198,14 +195,13 @@ def compute_present_locations(args, corpus, cache_filename,
             'object_present_sample', 'object_present_location',
             'object_location_popularity', 'weighted_mean_present_feature']):
         return
-    progress = default_progress()
     feature_shape = model.feature_shape[args.layer][2:]
     num_locations = numpy.prod(feature_shape).item()
     num_units = model.feature_shape[args.layer][1]
     with torch.no_grad():
         weighted_feature_sum = torch.zeros(num_units).cuda()
         object_presence_scores = []
-        for [zbatch] in progress(
+        for [zbatch] in pbar(
                 torch.utils.data.DataLoader(TensorDataset(full_sample),
                 batch_size=args.inference_batch_size, num_workers=10,
                 pin_memory=True),
@@ -250,10 +246,9 @@ def compute_mean_present_features(args, corpus, cache_filename, model):
     # is a doorway.
     if all(k in corpus for k in ['mean_present_feature']):
         return
-    progress = default_progress()
     with torch.no_grad():
         total_present_feature = 0
-        for [zbatch, featloc] in progress(
+        for [zbatch, featloc] in pbar(
                 torch.utils.data.DataLoader(TensorDataset(
                     corpus.object_present_sample,
                     corpus.object_present_location),
@@ -278,10 +273,9 @@ def compute_feature_quantiles(args, corpus, cache_filename, model, full_sample):
     # Phase 1.6.  Figure the 99% and 99.9%ile of every feature.
     if all(k in corpus for k in ['feature_99', 'feature_999']):
         return
-    progress = default_progress()
     with torch.no_grad():
         rq = RunningQuantile(resolution=10000) # 10x what's needed.
-        for [zbatch] in progress(
+        for [zbatch] in pbar(
                 torch.utils.data.DataLoader(TensorDataset(full_sample),
                 batch_size=args.inference_batch_size, num_workers=10,
                 pin_memory=True),
@@ -311,7 +305,6 @@ def compute_candidate_locations(args, corpus, cache_filename, model,
             'candidate_location', 'object_score_at_candidate',
             'candidate_location_popularity']):
         return
-    progress = default_progress()
     feature_shape = model.feature_shape[args.layer][2:]
     num_locations = numpy.prod(feature_shape).item()
     with torch.no_grad():
@@ -327,7 +320,7 @@ def compute_candidate_locations(args, corpus, cache_filename, model,
         candidate_scores = []
         object_scores = []
         prng = numpy.random.RandomState(1)
-        for [zbatch] in progress(
+        for [zbatch] in pbar(
                 torch.utils.data.DataLoader(TensorDataset(second_sample),
                 batch_size=args.inference_batch_size, num_workers=10,
                 pin_memory=True),
@@ -401,7 +394,6 @@ def compute_candidate_locations(args, corpus, cache_filename, model,
 
 def visualize_training_locations(args, corpus, cachedir, model):
     # Phase 2.5 Create visualizations of the corpus images.
-    progress = default_progress()
     feature_shape = model.feature_shape[args.layer][2:]
     num_locations = numpy.prod(feature_shape).item()
     with torch.no_grad():
@@ -417,7 +409,7 @@ def visualize_training_locations(args, corpus, cachedir, model):
                     corpus.candidate_sample,
                     corpus.candidate_location,
                     corpus.candidate_indices)]:
-            for [zbatch, featloc, indices] in progress(
+            for [zbatch, featloc, indices] in pbar(
                     torch.utils.data.DataLoader(TensorDataset(
                         group_sample, group_location, group_indices),
                         batch_size=args.inference_batch_size, num_workers=10,
@@ -546,7 +538,6 @@ def ace_loss(segmenter, classnum, model, layer, high_replacement, ablation,
 
 def train_ablation(args, corpus, cachefile, model, segmenter, classnum,
         initial_ablation=None):
-    progress = default_progress()
     cachedir = os.path.dirname(cachefile)
     snapdir = os.path.join(cachedir, 'snapshots')
     os.makedirs(snapdir, exist_ok=True)
@@ -634,7 +625,7 @@ def train_ablation(args, corpus, cachefile, model, segmenter, classnum,
         with torch.no_grad():
             total_loss = 0
             discrete_losses = {k: 0 for k in discrete_experiments}
-            for [pbatch, ploc, cbatch, cloc] in progress(
+            for [pbatch, ploc, cbatch, cloc] in pbar(
                     torch.utils.data.DataLoader(TensorDataset(
                         corpus.eval_present_sample,
                         corpus.eval_present_location,
@@ -660,11 +651,11 @@ def train_ablation(args, corpus, cachefile, model, segmenter, classnum,
             avg_d_losses = {k: (d / args.eval_size).item()
                     for k, d in discrete_losses.items()}
             regularizer = (args.l2_lambda * ablation.pow(2).sum())
-            print_progress('Epoch %d Loss %g Regularizer %g' %
+            pbar.print('Epoch %d Loss %g Regularizer %g' %
                     (epoch, avg_loss, regularizer))
-            print_progress(' '.join('%s: %g' % (k, d)
+            pbar.print(' '.join('%s: %g' % (k, d)
                     for k, d in avg_d_losses.items()))
-            print_progress(scale_summary(ablation.view(-1), 10, 3))
+            pbar.print(scale_summary(ablation.view(-1), 10, 3))
             return avg_loss, regularizer, avg_d_losses
 
     if args.eval_only:
@@ -716,7 +707,7 @@ def train_ablation(args, corpus, cachefile, model, segmenter, classnum,
     for epoch in range(start_epoch, args.train_epochs):
         candidate_shuffle = torch.randperm(len(corpus.candidate_sample))
         train_loss = 0
-        for batch_num, [pbatch, ploc, cbatch, cloc] in enumerate(progress(
+        for batch_num, [pbatch, ploc, cbatch, cloc] in enumerate(pbar(
                 torch.utils.data.DataLoader(TensorDataset(
                     corpus.object_present_sample,
                     corpus.object_present_location,
@@ -744,7 +735,7 @@ def train_ablation(args, corpus, cachefile, model, segmenter, classnum,
                 optimizer.step()
                 with torch.no_grad():
                     ablation.clamp_(0, 1)
-                    post_progress(l=(train_loss/update_size).item(),
+                    pbar.post(l=(train_loss/update_size).item(),
                             r=(regularizer/update_size).item())
                     train_loss = 0
 

@@ -34,8 +34,7 @@ import torch, numpy, os, re, json, shutil, types, tempfile, torchvision
 from PIL import Image
 from xml.etree import ElementTree as et
 from collections import OrderedDict, defaultdict
-from .progress import verbose_progress, default_progress, print_progress
-from .progress import desc_progress
+from . import pbar
 from .runningstats import RunningQuantile, RunningTopK
 from .runningstats import RunningCrossCovariance, RunningConditionalQuantile
 from .runningstats import RunningCovariance
@@ -520,7 +519,6 @@ def generate_images(outdir, model, dataset, topk, levels,
     Assumes that the indexes of topk refer to the indexes of dataset.
     Limits each strip to the top row_length images.
     '''
-    progress = default_progress()
     needed_images = {}
     if row_images is False:
         row_length = 1
@@ -545,7 +543,7 @@ def generate_images(outdir, model, dataset, topk, levels,
     # Pass 2: populate vizgrid with visualizations of top units.
     pool = None
     for i, batch in enumerate(
-            progress(segloader, desc='Making images')):
+            pbar(segloader, desc='Making images')):
         # Reverse transformation to get the image in byte form.
         seg, _, byte_im, _ = segrunner.run_and_segment_batch(batch, model,
                 want_rgb=True)
@@ -591,14 +589,14 @@ def generate_images(outdir, model, dataset, topk, levels,
     pool.join()
     # Pass 3: save image strips as [outdir]/[layer]/[unitnum]-[top/orig].jpg
     pool = WorkerPool(worker=SaveImageWorker)
-    for layer, vg in progress(vizgrid.items(), desc='Saving images'):
+    for layer, vg in pbar(vizgrid.items(), desc='Saving images'):
         os.makedirs(os.path.join(outdir, safe_dir_name(layer),
             prefix + 'image'), exist_ok=True)
         if single_images:
            os.makedirs(os.path.join(outdir, safe_dir_name(layer),
                prefix + 's-image'), exist_ok=True)
         og, sg, mg = origrid[layer], seggrid[layer], maskgrid[layer]
-        for unit in progress(range(len(vg)), desc='Units'):
+        for unit in pbar(range(len(vg)), desc='Units'):
             for suffix, grid in [('top.jpg', vg), ('orig.jpg', og),
                     ('seg.png', sg), ('mask.png', mg)]:
                 strip = grid[unit].reshape(
@@ -727,9 +725,8 @@ def collect_quantiles_and_topk(outdir, model, segloader,
             for i in range(0, len(all_layers), layer_batch_size)]
 
     quantiles, topks = {}, {}
-    progress = default_progress()
     for layer_batch in layer_batches:
-        for i, batch in enumerate(progress(segloader, desc='Quantiles')):
+        for i, batch in enumerate(pbar(segloader, desc='Quantiles')):
             # We don't actually care about the model output.
             model(batch[0].to(device))
             features = whiten(model.retained_features())
@@ -824,12 +821,11 @@ def collect_bincounts(outdir, model, segloader, levels, segrunner,
     intersection_counts = {}
     label_counts = torch.zeros(num_labels, dtype=torch.long, device=device)
     total_counts = torch.zeros(num_categories, dtype=torch.long, device=device)
-    progress = default_progress()
     scale_offset_map = getattr(model, 'scale_offset', None)
     upsample_grids = {}
     # total_batch_categories = torch.zeros(
     #         labelcat.shape[1], dtype=torch.long, device=device)
-    for i, batch in enumerate(progress(segloader, desc='Bincounts')):
+    for i, batch in enumerate(pbar(segloader, desc='Bincounts')):
         seg, batch_label_counts, _, imshape = segrunner.run_and_segment_batch(
                 batch, model, want_bincount=True, want_rgb=True)
         bc = batch_label_counts.cpu()
@@ -930,12 +926,11 @@ def collect_cond_quantiles(outdir, model, segloader, segrunner,
     conditional_quantiles = {}
     label_counts = torch.zeros(num_labels, dtype=torch.long, device=device)
     pixel_count = 0
-    progress = default_progress()
     scale_offset_map = getattr(model, 'scale_offset', None)
     upsample_grids = {}
     common_conditions = set()
     if label_fracs is None or label_fracs is 0:
-        for i, batch in enumerate(progress(segloader, desc='label fracs')):
+        for i, batch in enumerate(pbar(segloader, desc='label fracs')):
             seg, batch_label_counts, im, _ = segrunner.run_and_segment_batch(
                     batch, model, want_bincount=True, want_rgb=True)
             batch_label_counts = batch_label_counts.to(device)
@@ -950,12 +945,12 @@ def collect_cond_quantiles(outdir, model, segloader, segrunner,
     skip_labels = set(i.item()
         for i in (label_fracs.view(-1) < skip_threshold).nonzero().view(-1))
 
-    for layer in progress(model.retained_features().keys(), desc='CQ layers'):
+    for layer in pbar(model.retained_features().keys(), desc='CQ layers'):
         if cached_cond_quantiles.get(layer, None) is not None:
             conditional_quantiles[layer] = cached_cond_quantiles[layer]
             continue
 
-        for i, batch in enumerate(progress(segloader, desc='Condquant')):
+        for i, batch in enumerate(pbar(segloader, desc='Condquant')):
             seg, batch_label_counts, _, imshape = (
                     segrunner.run_and_segment_batch(
                          batch, model, want_bincount=True, want_rgb=True))
@@ -1049,8 +1044,7 @@ def collect_maxiou(outdir, model, segloader, segrunner, whiten=(lambda x: x)):
             [('cat', i) for i in range(num_categories)])
     max_iou, max_iou_level, max_iou_quantile = {}, {}, {}
     fracs = torch.logspace(-3, 0, 100)
-    progress = default_progress()
-    for layer, cq in progress(conditional_quantiles.items(), desc='Maxiou'):
+    for layer, cq in pbar(conditional_quantiles.items(), desc='Maxiou'):
         levels = cq.conditional(('all',)).quantiles(1 - fracs)
         denoms = 1 - cq.collected_normalize(category_list, levels)
         isects = (1 - cq.collected_normalize(label_list, levels)) * label_fracs
@@ -1110,8 +1104,7 @@ def collect_iqr(outdir, model, segloader, segrunner, whiten=(lambda x: x)):
             [('cat', i) for i in range(num_categories)])
     full_mi, full_je, full_iqr = {}, {}, {}
     fracs = torch.logspace(-3, 0, 100)
-    progress = default_progress()
-    for layer, cq in progress(conditional_quantiles.items(), desc='IQR'):
+    for layer, cq in pbar(conditional_quantiles.items(), desc='IQR'):
         levels = cq.conditional(('all',)).quantiles(1 - fracs)
         truth = label_fracs.to(device)
         preds = (1 - cq.collected_normalize(category_list, levels)
@@ -1228,8 +1221,7 @@ def collect_unit_pca(outdir, model, segloader, segrunner):
     
     # Running unit covariance
     cov = defaultdict(RunningCovariance)
-    progress = default_progress()
-    for i, batch in enumerate(progress(segloader, desc='Unit Covariance')):
+    for i, batch in enumerate(pbar(segloader, desc='Unit Covariance')):
         segrunner.run_and_segment_batch(batch, model, want_segment=False)
         features = model.retained_features()
         # Accumulate bincounts and identify nonzeros
@@ -1323,10 +1315,9 @@ def collect_label_covariance(outdir, model, segloader, segrunner,
 
     # Running covariance
     cov = {}
-    progress = default_progress()
     scale_offset_map = getattr(model, 'scale_offset', None)
     upsample_grids = {}
-    for i, batch in enumerate(progress(segloader, desc='Label Covariance')):
+    for i, batch in enumerate(pbar(segloader, desc='Label Covariance')):
         seg, _, _, imshape = segrunner.run_and_segment_batch(batch, model,
                 want_rgb=True)
         features = whiten(model.retained_features())

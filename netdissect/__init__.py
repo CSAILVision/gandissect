@@ -42,7 +42,7 @@ from .segdata import MultiSegmentDataset
 from .nethook import InstrumentedModel
 from .zdataset import z_dataset_for_model, z_sample_for_model, standard_z_sample
 from . import actviz
-from . import progress
+from . import pbar
 from . import runningstats
 from . import sampler
 
@@ -54,7 +54,7 @@ __all__ = [
     'InstrumentedModel',
     'z_dataset_for_model', 'z_sample_for_model', 'standard_z_sample'
     'actviz',
-    'progress',
+    'pbar',
     'runningstats',
     'sampler'
 ]

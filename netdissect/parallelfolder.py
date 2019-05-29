@@ -9,7 +9,7 @@ import torch.utils.data as data
 from torchvision.datasets.folder import default_loader
 from PIL import Image
 from collections import OrderedDict
-from .progress import default_progress
+from . import pbar
 
 def grayscale_loader(path):
     with open(path, 'rb') as f:
@@ -77,17 +77,15 @@ def is_image_file(path):
     return None != re.search(r'\.(jpe?g|png)$', path, re.IGNORECASE)
 
 def walk_image_files(rootdir, verbose=None):
-    progress = default_progress(verbose)
     indexfile = '%s.txt' % rootdir
     if os.path.isfile(indexfile):
         basedir = os.path.dirname(rootdir)
         with open(indexfile) as f:
-            result = sorted([os.path.join(basedir, line.strip())
-                for line in progress(f.readlines(),
-                    desc='Reading %s' % os.path.basename(indexfile))])
+            result = [os.path.join(basedir, line.strip())
+                for line in f.readlines()]
             return result
     result = []
-    for dirname, _, fnames in sorted(progress(os.walk(rootdir),
+    for dirname, _, fnames in sorted(pbar(os.walk(rootdir),
             desc='Walking %s' % os.path.basename(rootdir))):
         for fname in sorted(fnames):
             if is_image_file(fname) or is_npy_file(fname):

@@ -2,7 +2,7 @@ import torch, argparse, sys, os, numpy
 from netdissect.sampler import FixedRandomSubsetSampler, FixedSubsetSampler
 from torch.utils.data import DataLoader
 from torchvision import transforms
-from netdissect.progress import default_progress, verbose_progress
+from netdissect import pbar
 from netdissect import zdataset
 from netdissect import segmenter
 from netdissect import frechet_distance
@@ -25,7 +25,7 @@ def main():
         parser.print_usage(sys.stderr)
         sys.exit(1)
     args = parser.parse_args()
-    verbose_progress(True)
+    pbar.verbose(True)
     true_dir, gen_dir = args.true_dir, args.gen_dir
     seed1, seed2 = [1, 1 if true_dir != gen_dir else 2]
     true_tally, gen_tally = [
@@ -57,7 +57,6 @@ def cached_tally_directory(directory, size=10000, cachedir=None, seed=1):
     return result
 
 def tally_directory(directory, size=10000, seed=1):
-    progress = default_progress()
     dataset = parallelfolder.ParallelImageFolders(
                 [directory],
                 transform=transforms.Compose([
@@ -78,7 +77,7 @@ def tally_directory(directory, size=10000, seed=1):
             dtype=torch.float).cuda()
     with torch.no_grad():
         batch_index = 0
-        for [batch] in progress(loader):
+        for [batch] in pbar(loader):
             seg_result = upp.segment_batch(batch.cuda())
             for i in range(len(batch)):
                 batch_result[i] = (
@@ -92,7 +91,6 @@ def tally_directory(directory, size=10000, seed=1):
     return result
 
 def tally_dataset_objects(dataset, size=10000):
-    progress = default_progress()
     loader = DataLoader(dataset,
                         sampler=FixedRandomSubsetSampler(dataset, end=size),
                         batch_size=10, pin_memory=True)
@@ -103,7 +101,7 @@ def tally_dataset_objects(dataset, size=10000):
             dtype=torch.float).cuda()
     with torch.no_grad():
         batch_index = 0
-        for [batch] in progress(loader):
+        for [batch] in pbar(loader):
             seg_result = upp.segment_batch(batch.cuda())
             for i in range(len(batch)):
                 batch_result[i] = (
@@ -117,7 +115,6 @@ def tally_dataset_objects(dataset, size=10000):
     return result
 
 def tally_generated_objects(model, size=10000):
-    progress = default_progress()
     zds = zdataset.z_dataset_for_model(model, size)
     loader = DataLoader(zds, batch_size=10, pin_memory=True)
     upp = segmenter.UnifiedParsingSegmenter()
@@ -127,7 +124,7 @@ def tally_generated_objects(model, size=10000):
             dtype=torch.float).cuda()
     with torch.no_grad():
         batch_index = 0
-        for [zbatch] in progress(loader):
+        for [zbatch] in pbar(loader):
             img = model(zbatch.cuda())
             seg_result = upp.segment_batch(img)
             for i in range(len(zbatch)):

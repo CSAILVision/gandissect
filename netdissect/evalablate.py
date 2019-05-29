@@ -1,8 +1,7 @@
 import torch, sys, os, argparse, textwrap, numbers, numpy, json, PIL
 from torchvision import transforms
 from torch.utils.data import TensorDataset
-from netdissect.progress import default_progress, post_progress, desc_progress
-from netdissect.progress import verbose_progress, print_progress
+from netdissect import pbar
 from netdissect.nethook import edit_layers
 from netdissect.zdataset import standard_z_sample
 from netdissect.autoeval import autoimport_eval
@@ -78,7 +77,7 @@ def main():
     args = parser.parse_args()
 
     # Set up console output
-    verbose_progress(not args.quiet)
+    pbar.verbose(not args.quiet)
 
     # Speed up pytorch
     torch.backends.cudnn.benchmark = True
@@ -135,11 +134,10 @@ def main():
         model.ablation[l] = None
 
     # For each sort-order, do an ablation
-    progress = default_progress()
-    for classname in progress(args.classes):
-        post_progress(c=classname)
-        for layername in progress(model.ablation):
-            post_progress(l=layername)
+    for classname in pbar(args.classes):
+        pbar.post(c=classname)
+        for layername in pbar(model.ablation):
+            pbar.post(l=layername)
             rankname = '%s-%s' % (classname, args.metric)
             classnum = labelnum_from_name[classname]
             try:
@@ -179,14 +177,13 @@ def measure_ablation(segmenter, loader, model, classnum, layer, ordering):
     total_bincount = 0
     data_size = 0
     device = next(model.parameters()).device
-    progress = default_progress()
     for l in model.ablation:
         model.ablation[l] = None
     feature_units = model.feature_shape[layer][1]
     feature_shape = model.feature_shape[layer][2:]
     repeats = len(ordering)
     total_scores = torch.zeros(repeats + 1)
-    for i, batch in enumerate(progress(loader)):
+    for i, batch in enumerate(pbar(loader)):
         z_batch = batch[0]
         model.ablation[layer] = None
         tensor_images = model(z_batch.to(device))

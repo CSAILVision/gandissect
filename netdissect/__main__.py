@@ -1,7 +1,7 @@
 import torch, sys, os, argparse, textwrap, numbers, numpy, json, PIL
 from torchvision import transforms
 from torch.utils.data import TensorDataset
-from netdissect.progress import verbose_progress, print_progress
+from netdissect import pbar
 from netdissect import InstrumentedModel, BrodenDataset, dissect
 from netdissect import MultiSegmentDataset, GeneratorSegRunner
 from netdissect import ImageOnlySegRunner
@@ -125,7 +125,7 @@ def main():
         args.gen = args.gan
 
     # Set up console output
-    verbose_progress(not args.quiet)
+    pbar.verbose(not args.quiet)
 
     # Exit right away if job is already done or being done.
     if args.outdir is not None:
@@ -145,9 +145,9 @@ def main():
 
     # Help if broden is not present
     if not args.gen and not args.imagedir and not os.path.isdir(args.segments):
-        print_progress('Segmentation dataset not found at %s.' % args.segments)
-        print_progress('Specify dataset directory using --segments [DIR]')
-        print_progress('To download Broden, run: netdissect --download')
+        pbar.print('Segmentation dataset not found at %s.' % args.segments)
+        pbar.print('Specify dataset directory using --segments [DIR]')
+        pbar.print('To download Broden, run: netdissect --download')
         sys.exit(1)
 
     # Default segmenter class
@@ -169,7 +169,7 @@ def main():
 
     # Construct the network with specified layers instrumented
     if args.model is None:
-        print_progress('No model specified')
+        pbar.print('No model specified')
         sys.exit(1)
     model = create_instrumented_model(args)
 
@@ -190,7 +190,7 @@ def main():
     if args.outdir is None:
         args.outdir = os.path.join('dissect', type(model).__name__)
         exit_if_job_done(args.outdir)
-        print_progress('Writing output into %s.' % args.outdir)
+        pbar.print('Writing output into %s.' % args.outdir)
     os.makedirs(args.outdir, exist_ok=True)
     train_dataset = None
 
@@ -214,9 +214,9 @@ def main():
             dataset = try_to_load_multiseg(args.segments, args.imgsize,
                     perturbation, args.size)
         if dataset is None:
-            print_progress('No segmentation dataset found in %s',
+            pbar.print('No segmentation dataset found in %s',
                     args.segments)
-            print_progress('use --download to download Broden.')
+            pbar.print('use --download to download Broden.')
             sys.exit(1)
     else:
         # For segmenter case the dataset is just a random z
@@ -269,7 +269,7 @@ class AddPerturbation(object):
         return npyimg / 255.0
 
 def test_dissection():
-    verbose_progress(True)
+    pbar.verbose(True)
     from torchvision.models import alexnet
     from torchvision import transforms
     model = InstrumentedModel(alexnet(pretrained=True))

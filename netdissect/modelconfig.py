@@ -1,7 +1,7 @@
 import numbers
 import torch
 from netdissect.autoeval import autoimport_eval
-from netdissect.progress import print_progress
+from netdissect import pbar
 from netdissect.nethook import InstrumentedModel
 from netdissect.easydict import EasyDict
 
@@ -33,7 +33,7 @@ def create_instrumented_model(args, **kwargs):
 
     # Construct the network
     if args.model is None:
-        print_progress('No model specified')
+        pbar.print('No model specified')
         return None
     if isinstance(args.model, torch.nn.Module):
         model = args.model
@@ -60,7 +60,7 @@ def create_instrumented_model(args, **kwargs):
             data = { k[len(remove_prefix):]: v for k, v in data.items()
                     if k.startswith(remove_prefix)}
             if not len(data):
-                print_progress('No submodule %s found in %s' %
+                pbar.print('No submodule %s found in %s' %
                         (submodule, args.pthfile))
                 return None
         model.load_state_dict(data, strict=not getattr(args, 'unstrict', False))
@@ -72,7 +72,7 @@ def create_instrumented_model(args, **kwargs):
     if getattr(args, 'layers', None) is not None:
         if len(args.layers) == 1 and args.layers[0] == ('?', '?'):
             for name, layer in model.named_modules():
-                print_progress(name)
+                pbar.print(name)
             import sys
             sys.exit(0)
     if getattr(args, 'layers', None) is None:
@@ -91,7 +91,7 @@ def create_instrumented_model(args, **kwargs):
                     # Skip pooling layers.
                     'torch.nn.modules.pooling']
                 ][:-1]
-        print_progress('Defaulting to layers: %s' % ' '.join(args.layers))
+        pbar.print('Defaulting to layers: %s' % ' '.join(args.layers))
 
     # Now wrap the model for instrumentation.
     model = InstrumentedModel(model)
