@@ -394,8 +394,11 @@ class RunningQuantile:
         return (summary, weights)
 
     def quantiles(self, quantiles, old_style=False):
+        if not hasattr(quantiles, 'cpu'):
+            quantiles = torch.tensor(quantiles)
+        qshape = quantiles.shape
         if self.count == 0:
-            return torch.full((self.depth, len(quantiles)), torch.nan)
+            return torch.full((self.depth,) + qshape, torch.nan)
         summary, weights = self._weighted_summary()
         cumweights = torch.cumsum(weights, dim=-1) - weights / 2
         if old_style:
@@ -404,18 +407,16 @@ class RunningQuantile:
             cumweights /= cumweights[:,-1:].clone()
         else:
             cumweights /= torch.sum(weights, dim=-1, keepdim=True)
-        result = torch.zeros(self.depth, len(quantiles),
+        result = torch.zeros(self.depth, quantiles.numel(),
                 dtype=self.dtype, device=self.device)
         # numpy is needed for interpolation
-        if not hasattr(quantiles, 'cpu'):
-            quantiles = torch.Tensor(quantiles)
-        nq = quantiles.cpu().numpy()
+        nq = quantiles.view(-1).cpu().numpy()
         ncw = cumweights.cpu().numpy()
         nsm = summary.cpu().numpy()
         for d in range(self.depth):
             result[d] = torch.tensor(numpy.interp(nq, ncw[d], nsm[d]),
                     dtype=self.dtype, device=self.device)
-        return result
+        return result.view((self.depth,) + qshape)
 
     def integrate(self, fun):
         result = None
@@ -1045,7 +1046,7 @@ if __name__ == '__main__':
             torch.abs(qc.variance() - alldata.var(0)) / alldata.var(0)).cpu()
     print("Variance error: %f" % varerr)
     counterr = ((qc.integrate(lambda x: torch.ones(x.shape[-1]).cpu())
-                - qc.size) / (0.0 + qc.size)).item()
+                - qc.size()) / (0.0 + qc.size())).item()
     print("Count error: %f" % counterr)
     print("Time %f" % (endtime - starttime))
     # Algorithm is randomized, so some of these will fail with low probability.
