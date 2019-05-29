@@ -3,13 +3,18 @@ from netdissect import sampler, runningstats, pbar
 
 def conditional_samples(activations, segments):
     '''
-    Takes a set of activations and segmentations, both 4d tensors with
-    the same spatial resultion.
+    Transforms a batch of activations and segmentations into a
+    sequence of conditional statistics, i.e., activations that
+    are at the same location as the segmentation label.
+    Both activations nad segments should be 4d tensors with
+    the same sample, y, and x dimensions.  Segments can be
+    a multilabel segmentation.  The zero segmentation value is
+    assumed to be unused.
 
-    Returns a generator for a sequence of (condition, 2d-tensor),
+    Returns a generator for a sequence of (condition, (sample, unit)-tensor)
     listing every condition present in the segments, along with the
-    set of activations under that condition.  The activation tensor is
-    in [sample, channel] order, where sample is the number of samples
+    set of activations overlapping that condition.  The activation tensor
+    is 2d in (sample, unit) order, where sample is the number of samples
     with for the condition.
     '''
     channels = activations.shape[1]
@@ -30,8 +35,9 @@ def conditional_samples(activations, segments):
 def tally_topk(compute, dataset, sample_size=None, batch_size=10, k=100,
         **kwargs):
     '''
-    Pass a batch stats computation function and a dataset, and will
-    tally up the top k for each.
+    Computes the topk statistics for a large data sample that can be
+    computed from a dataset.  The compute function should return one
+    batch of samples as a (sample, unit)-dimension tensor.
     '''
     with torch.no_grad():
         loader = make_loader(dataset, sample_size, batch_size, **kwargs)
@@ -45,11 +51,9 @@ def tally_topk(compute, dataset, sample_size=None, batch_size=10, k=100,
 def tally_quantile(compute, dataset, sample_size=None, batch_size=10,
         resolution=2048, **kwargs):
     '''
-    Pass a batch stats computation function and a dataset, and will
-    tally up estimated quantile stats for each of the computed features.
-
-    The compute function should take a batch (as returned by a dataloder)
-    and return a 2d tensor with axes (samplesize, featurenum).
+    Computes quantile sketch statistics for a large data sample that can
+    be computed from a dataset.  The compute function should return one
+    batch of samples as a (sample, unit)-dimension tensor.
     '''
     with torch.no_grad():
         loader = make_loader(dataset, sample_size, batch_size, **kwargs)
@@ -64,15 +68,10 @@ def tally_conditional_quantile(compute, dataset,
         sample_size=None, batch_size=1, gpu_cache=64, resolution=2048,
         **kwargs):
     '''
-    Pass a batch stats computation function and a dataset, and will
-    tally up estimated conditional quantile stats for each of the
-    computed features, over all of the supplied conditions.
-
-    The compute function should take a batch (as returned by a dataloder)
-    and return a generator that returns an iteration over
-    (condition, 2d-tensor) pairs, where condition is an arbitrary hashable
-    indicating the condition being tested, and the tensor tensor contains
-    features with axes (samplesize, featurenum).
+    Computes conditional quantile sketches for a large data sample that
+    can be computed from a dataset.  The compute function should return a
+    sequence of sample batch tuples (condition, (sample, unit)-tensor),
+    one for each condition relevant to the batch.
     '''
     with torch.no_grad():
         loader = make_loader(dataset, sample_size, batch_size, **kwargs)
@@ -96,8 +95,9 @@ def tally_conditional_quantile(compute, dataset,
 
 def tally_variance(compute, dataset, sample_size=None, batch_size=10, **kwargs):
     '''
-    Pass a batch stats computation function and a dataset, and will
-    tally up estimated mean and variance for each of the computed features.
+    Computes unitwise mean and variance stats for a large data sample that
+    can be computed from a dataset.  The compute function should return one
+    batch of samples as a (sample, unit)-dimension tensor.
     '''
     with torch.no_grad():
         loader = make_loader(dataset, sample_size, batch_size, **kwargs)
@@ -111,15 +111,10 @@ def tally_variance(compute, dataset, sample_size=None, batch_size=10, **kwargs):
 def tally_conditional_variance(compute, dataset,
         sample_size=None, batch_size=1, **kwargs):
     '''
-    Pass a batch stats computation function and a dataset, and will
-    tally up estimated conditional quantile stats for each of the
-    computed features, over all of the supplied conditions.
-
-    The compute function should take a batch (as returned by a dataloder)
-    and return a generator that returns an iteration over
-    (condition, 2d-tensor) pairs, where condition is an arbitrary hashable
-    indicating the condition being tested, and the tensor tensor contains
-    features with axes (samplesize, featurenum).
+    Computes conditional mean and variance for a large data sample that
+    can be computed from a dataset.  The compute function should return a
+    sequence of sample batch tuples (condition, (sample, unit)-tensor),
+    one for each condition relevant to the batch.
     '''
     with torch.no_grad():
         loader = make_loader(dataset, sample_size, batch_size, **kwargs)
@@ -136,8 +131,9 @@ def tally_conditional_variance(compute, dataset,
 def tally_bincount(compute, dataset, sample_size=None, batch_size=10,
         multi_label_axis=None, **kwargs):
     '''
-    Pass a batch stats computation function and a dataset, and will
-    tally up the top k for each.
+    Computes bincount totals for a large data sample that can be
+    computed from a dataset.  The compute function should return one
+    batch of samples as a (sample, unit)-dimension tensor.
     '''
     with torch.no_grad():
         loader = make_loader(dataset, sample_size, batch_size, **kwargs)
@@ -156,8 +152,10 @@ def tally_bincount(compute, dataset, sample_size=None, batch_size=10,
 def tally_cat(compute, dataset, sample_size=None, batch_size=10,
         **kwargs):
     '''
-    Pass a batch stats computation function and a dataset, and will
-    tally up the top k for each.
+    Computes a concatenated tensor for data batches that can be
+    computed from a dataset.  The compute function should return
+    a tensor that should be concatenated to the others along its
+    first dimension.
     '''
     with torch.no_grad():
         loader = make_loader(dataset, sample_size, batch_size, **kwargs)
@@ -167,6 +165,11 @@ def tally_cat(compute, dataset, sample_size=None, batch_size=10,
         return torch.cat(result)
 
 def iou_from_conditional_quantile(condq, cutoff=0.95):
+    '''
+    Given a RunningConditionalQuantile, estimates all-pairs
+    IoU statistics for all units and conditions at the specified
+    quantile cutoff.
+    '''
     uncond_size = condq.conditional(0).size()
     units = condq.conditional(0).depth
     iouscores = torch.zeros((units, max(condq.keys()) + 1))
@@ -180,6 +183,7 @@ def iou_from_conditional_quantile(condq, cutoff=0.95):
     return iouscores
 
 def call_compute(compute, batch):
+    '''Utility for passing a dataloader batch to a compute function.'''
     if isinstance(batch, list):
         return compute(*batch)
     elif isinstance(batch, dict):
@@ -188,6 +192,7 @@ def call_compute(compute, batch):
         return compute(batch)
 
 def make_loader(dataset, sample_size=None, batch_size=10, *kwargs):
+    '''Utility for creating a dataloader on fixed sample subset.'''
     if isinstance(dataset, torch.Tensor):
         dataset = torch.utils.data.TensorDataset(dataset)
     return torch.utils.data.DataLoader(
