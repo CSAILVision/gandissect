@@ -158,6 +158,7 @@ class RunningQuantile:
         self.currentbit = len(self.randbits) - 1
         self.extremes = None
         self.count = 0
+        self.batchcount = 0
 
     def size(self):
         return self.count
@@ -190,6 +191,7 @@ class RunningQuantile:
         assert len(incoming.shape) == 2
         assert incoming.shape[1] == self.depth, (incoming.shape[1], self.depth)
         self.count += incoming.shape[0]
+        self.batchcount += 1
         # Convert to a flat torch array.
         if self.samplerate >= 1.0:
             self._add_every(incoming)
@@ -280,7 +282,8 @@ class RunningQuantile:
                     for d, f in zip(self.data, self.firstfree)],
                 sizes=[d.shape[1] for d in self.data],
                 extremes=self.extremes.cpu().numpy(),
-                size=self.count)
+                size=self.count,
+                batchcount=self.batchcount)
 
     def set_state_dict(self, dic):
         self.resolution = int(dic['resolution'])
@@ -300,6 +303,7 @@ class RunningQuantile:
         self.data = buffers
         self.extremes = torch.from_numpy((dic['extremes']))
         self.count = int(dic['size'])
+        self.batchcount = int(dic['batchcount'])
         self.dtype = self.extremes.dtype
         self.device = self.extremes.device
 
@@ -512,6 +516,9 @@ class RunningConditionalQuantile:
 
     def keys(self):
         return self.running_quantiles.keys()
+
+    def sizes(self):
+        return {k: self.running_quantiles[c].size() for k in self.keys()}
 
     def conditional(self, c):
         return self.running_quantiles[c]
