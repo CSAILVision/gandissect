@@ -3,13 +3,6 @@ from netdissect import upsample, renormalize, segviz
 from torchvision import transforms
 from matplotlib import cm
 
-# to use:
-# def activation_surface(data, target_shape=None, source_shape=None,
-#         scale_offset=None, deg=1, pad=True):
-# def activation_visualization(image, data, level, alpha=0.5, source_shape=None,
-#        target_shape=None, crop=False, zoom=None, border=2,
-#        negate=False, return_mask=False, **kwargs)
-
 class ImageVisualizer:
     def __init__(self, size, image_size=None, data_size=None,
             renormalizer=None, scale_offset=None, level=None, actrange=None,
@@ -143,10 +136,17 @@ def border_from_mask(a):
     out = torch.zeros_like(a)
     h = (a[:-1,:] != a[1:,:])
     v = (a[:,:-1] != a[:,1:])
+    d = (a[:-1,:-1] != a[1:,1:])
+    u = (a[1:,:-1] != a[:-1,1:])
+    out[:-1,:-1] |= d
+    out[1:,1:] |= d
+    out[1:,:-1] |= u
+    out[:-1,1:] |= u
     out[:-1,:] |= h
     out[1:,:] |= h
     out[:,:-1] |= v
     out[:,1:] |= v
+    out &= ~a
     return out
 
 def image_size_from_source(source):
