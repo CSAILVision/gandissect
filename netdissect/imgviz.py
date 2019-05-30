@@ -30,6 +30,7 @@ class ImageVisualizer:
         self.percent_level = percent_level
         self.level = level
         self.actrange = actrange
+        self.quantiles = quantiles
         self.upsampler = None
         if self.data_size is not None:
             self.upsampler = upsample.upsampler(size, data_size,
@@ -66,9 +67,11 @@ class ImageVisualizer:
         return PIL.Image.fromarray(self.scaled_image(imagedata)
                 .permute(1, 2, 0).byte().cpu().numpy())
 
-    def masked_image(self, imagedata, activations, unit=None):
+    def masked_image(self, imagedata, activations, unit=None,
+            level=None, percent_level=None):
         scaled_image = self.scaled_image(imagedata).float()
-        mask = self.pytorch_mask(activations, unit)
+        mask = self.pytorch_mask(activations, unit, level=level,
+                percent_level=percent_level)
         border = border_from_mask(mask)
         inside = (mask & (~border))
         outside = (~mask & (~border))
@@ -86,12 +89,14 @@ class ImageVisualizer:
         # returns a dissection-style image overlay
         pass
 
-    def pytorch_mask(self, activations, unit):
+    def pytorch_mask(self, activations, unit, level=None, percent_level=None):
         if unit is None:
             a = activations
         else:
             a = activations[unit]
-        level = self.level_for(activations, unit)
+        if level is None:
+            level = self.level_for(activations, unit,
+                    percent_level=percent_level)
         upsampler = self.upsampler_for(a)
         return (upsampler(a[None, None,...])[0,0] > level)
 
@@ -118,13 +123,17 @@ class ImageVisualizer:
             return tuple(i.item() for i in self.actrange[unit])
         return activations.min(), activations.max()
 
-    def level_for(self, activations, unit):
-        if unit is not None and self.level is not None:
+    def level_for(self, activations, unit, percent_level=None):
+        if unit is not None:
             if hasattr(unit, '__len__'):
                 unit = unit[1]
-            return self.level[unit].item()
+            if percent_level is not None and self.quantiles is not None:
+                return self.quantiles.quantiles(percent_level)[unit]
+            if self.level is not None:
+                return self.level[unit].item()
         s, _ = activations.view(-1).sort()
-        percent_level = self.percent_level or 0.95
+        if percent_level is None:
+            percent_level = self.percent_level or 0.95
         return s[int(len(s) * percent_level)]
 
     def renormalizer_for(self, image):
