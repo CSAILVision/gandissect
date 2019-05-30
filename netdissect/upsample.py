@@ -13,7 +13,7 @@ def upsampler(target_shape, data_shape=None,
     '''
     if source is not None:
         assert image_size is None
-        scale_offset = image_size_from_source(source)
+        image_size = image_size_from_source(source)
     if convolutions is not None:
         assert scale_offset is None
         scale_offset = sequence_scale_offset(convolutions)
