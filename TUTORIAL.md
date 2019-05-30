@@ -29,3 +29,28 @@ jupyter notebook &
 ```
 
 Then run the notebook `dissect_progan.ipynb`
+
+## Notes on running Jupyter remotely
+
+If you are running on a remote server that you connect to via
+ssh, then one way to access the Jupyter HTTP server is via ssh
+tunnelling, as follows:
+
+On the server:
+
+```
+jupyter notebook --no-browser --port=7000
+```
+
+On your local machine:
+
+```
+ssh [username]@[server_address] -N -f -L localhost:6007:localhost:7000
+```
+
+Open a browser in your local machine and use the corresponding URL
+(make sure you specify the correct port):
+
+```
+http://localhost:7000/?token=[token_id]
+```
