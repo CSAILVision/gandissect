@@ -1,7 +1,9 @@
 import torch
+from torchvision import transforms
 
-def upsampler(target_shape, data_shape, image_size=None, scale_offset=None,
-        convolutions=None, dtype=torch.float, device=None):
+def upsampler(target_shape, data_shape=None,
+        image_size=None, scale_offset=None,
+        source=None, convolutions=None, dtype=torch.float, device=None):
     '''
     Returns a function that will upsample a batch of torch data from the
     expected data_shape to the specified target_shape. Can use scale_offset
@@ -9,9 +11,15 @@ def upsampler(target_shape, data_shape, image_size=None, scale_offset=None,
     maps feature pixels to image_size pixels, and it is assumed that
     the target_shape is a uniform downsampling of image_size.
     '''
+    if source is not None:
+        assert image_size is None
+        scale_offset = image_size_from_source(source)
     if convolutions is not None:
         assert scale_offset is None
         scale_offset = sequence_scale_offset(convolutions)
+        if image_size is not None and data_shape is None:
+            data_shape = sequence_data_size(convolutions, image_size)
+    assert data_shape is not None
     grid = upsample_grid(data_shape, target_shape, image_size, scale_offset,
             dtype, device)
     batch_grid = grid
@@ -132,4 +140,32 @@ def upsample_grid(data_shape, target_shape, image_size=None,
         (tx[None,:].expand(target_shape), ty[:,None].expand(target_shape)),2
        )[None,:,:,:].expand((1, target_shape[0], target_shape[1], 2))
     return grid
+
+def image_size_from_source(source):
+    sizer = find_sizer(source)
+    size = sizer.size
+    if hasattr(size, '__len__'):
+        return size
+    return (size, size)
+
+def find_sizer(source):
+    '''
+    Crawl around the transforms attached to a dataset looking for
+    the last crop or resize transform to return.
+    '''
+    if source is None:
+        return None
+    if isinstance(source, (transforms.Resize, transforms.RandomCrop,
+        transforms.RandomResizedCrop, transforms.CenterCrop)):
+        return source
+    t = getattr(source, 'transform', None)
+    if t is not None:
+        return find_sizer(t)
+    ts = getattr(source, 'transforms', None)
+    if ts is not None:
+        for t in reversed(ts):
+            result = find_sizer(t)
+            if result is not None:
+                return result
+    return None
 

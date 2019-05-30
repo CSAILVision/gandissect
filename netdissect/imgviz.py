@@ -1,6 +1,5 @@
 import PIL, torch
 from netdissect import upsample, renormalize, segviz
-from torchvision import transforms
 from matplotlib import cm
 
 class ImageVisualizer:
@@ -9,7 +8,7 @@ class ImageVisualizer:
             source=None, convolutions=None, quantiles=None,
             percent_level=None):
         if image_size is None and source is not None:
-            image_size = image_size_from_source(source)
+            image_size = upsample.image_size_from_source(source)
         if renormalizer is None and source is not None:
             renormalizer = renormalize.renormalizer(source=source, mode='byte')
         if scale_offset is None and convolutions is not None:
@@ -157,32 +156,4 @@ def border_from_mask(a):
     out[:,1:] |= v
     out &= ~a
     return out
-
-def image_size_from_source(source):
-    sizer = find_sizer(source)
-    size = sizer.size
-    if hasattr(size, '__len__'):
-        return size
-    return size
-
-def find_sizer(source):
-    '''
-    Crawl around the transforms attached to a dataset looking for
-    the last crop or resize transform to return.
-    '''
-    if source is None:
-        return None
-    if isinstance(source, (transforms.Resize, transforms.RandomCrop,
-        transforms.RandomResizedCrop, transforms.CenterCrop)):
-        return source
-    t = getattr(source, 'transform', None)
-    if t is not None:
-        return find_sizer(t)
-    ts = getattr(source, 'transforms', None)
-    if ts is not None:
-        for t in reversed(ts):
-            result = find_sizer(t)
-            if result is not None:
-                return result
-    return None
 
