@@ -12,10 +12,10 @@ import PIL, base64, io, IPython, types, sys
 import html as html_module
 from IPython.display import display
 
-def blocks(obj, space='\n'):
+def blocks(obj, space=''):
     return IPython.display.HTML(space.join(blocks_tags(obj)))
 
-def rows(obj, space='\n'):
+def rows(obj, space=''):
     return IPython.display.HTML(space.join(rows_tags(obj)))
 
 def rows_tags(obj):
@@ -27,7 +27,7 @@ def rows_tags(obj):
         results.append('<tr style="padding:0">')
         for item in row:
             results.append('<td style="text-align:left; vertical-align:top;' +
-                'padding:2px">')
+                'padding:1px">')
             results.extend(blocks_tags(item))
             results.append('</td>')
         results.append('</tr>')
@@ -49,7 +49,7 @@ def blocks_tags(obj):
     elif hasattr(obj, '__iter__'):
         blockstart, blockend, tstart, tend, rstart, rend, cstart, cend = [
           '<div style="display:inline-block;text-align:center;line-height:1;' +
-             'vertical-align:top">',
+              'vertical-align:top;padding:1px">',
           '</div>',
           '<table style="display:inline-table">',
           '</table>',
