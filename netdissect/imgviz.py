@@ -69,9 +69,9 @@ class ImageVisualizer:
 
     def masked_image(self, imagedata, activations, unit=None,
             level=None, percent_level=None):
-        scaled_image = self.scaled_image(imagedata).float()
+        scaled_image = self.scaled_image(imagedata).float().cpu()
         mask = self.pytorch_mask(activations, unit, level=level,
-                percent_level=percent_level)
+                percent_level=percent_level).cpu()
         border = border_from_mask(mask)
         inside = (mask & (~border))
         outside = (~mask & (~border))
@@ -128,7 +128,7 @@ class ImageVisualizer:
             if hasattr(unit, '__len__'):
                 unit = unit[1]
             if percent_level is not None and self.quantiles is not None:
-                return self.quantiles.quantiles(percent_level)[unit]
+                return self.quantiles.quantiles(percent_level)[unit].item()
             if self.level is not None:
                 return self.level[unit].item()
         s, _ = activations.view(-1).sort()
