@@ -10,7 +10,7 @@ git clone --branch tutorial https://github.com/CSAILVision/gandissect.git
 
 To install everything needed from this repo, have `conda` available
 (I happen to use conda 4.6.8, but it also works fine on conda 1.x).
-Then run:
+Then go to the main folder (`cd gandissect`) and run:
 
 ```
 script/setup_env.sh      # Create a conda environment with dependencies
