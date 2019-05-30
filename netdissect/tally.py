@@ -242,7 +242,8 @@ def intersection_from_conditional_quantile(
     scores = torch.zeros((units, max(condq.keys()) + 1) + cutoff.shape)
     # math: actlevel = level such that p(x > level) = cutoff
     actlevel = condq.conditional(0).quantiles(cutoff)
-    prog = pbar if cutoff.numel() > 20 else lambda x: x
+    # use a progress bar if it's going to be more than a few seconds.
+    prog = pbar if cutoff.numel() * units > 1e5 else lambda x: x
     for c in prog(sorted(condq.keys())):
         rq = condq.conditional(c)
         if c == 0 or rq.batchcount < min_batches:
