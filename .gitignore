@@ -11,6 +11,7 @@
 /imagesample
 /notebooks/dataset
 /notebooks/dissect
+/notebooks/netdissect
 /notebooks/models
 __pycache__
 .DS_Store
