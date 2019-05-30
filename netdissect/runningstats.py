@@ -127,9 +127,11 @@ class RunningQuantile:
     quantile estimates (or old-style percentiles) can be read out using
     quantiles(q) or percentiles(p).
 
-    Accuracy scales according to resolution: the default is to
-    set resolution to be accurate to better than 0.1%,
-    while limiting storage to about 50,000 samples.
+    Implemented as a sorted sample that retains at least r samples
+    (by default r = 3072); the number of retained samples will grow to
+    a finite ceiling as the data is accumulated.  Accuracy scales according
+    to r: the default is to set resolution to be accurate to better than about
+    0.1%, while limiting storage to about 50,000 samples.
 
     Good for computing quantiles of huge data without using much memory.
     Works well on arbitrary data with probability near 1.
@@ -138,7 +140,7 @@ class RunningQuantile:
     from FOCS 2016.  http://ieee-focs.org/FOCS-2016-Papers/3933a071.pdf
     """
 
-    def __init__(self, resolution=6 * 1024, buffersize=None, seed=None,
+    def __init__(self, r=3 * 1024, buffersize=None, seed=None,
             state=None):
         if state is not None:
             self.set_state_dict(state)
@@ -146,6 +148,7 @@ class RunningQuantile:
         self.depth = None
         self.dtype = None
         self.device = None
+        resolution = r * 2 # sample array is at least half full before discard
         self.resolution = resolution
         # Default buffersize: 128 samples (and smaller than resolution).
         if buffersize is None:
@@ -483,7 +486,7 @@ class RunningConditionalQuantile:
     rcq.most_common_conditions(n) returns a list of the n most commonly
     added conditions so far.
     '''
-    def __init__(self, resolution=6 * 1024, buffersize=None, seed=None,
+    def __init__(self, r=3 * 1024, buffersize=None, seed=None,
             state=None):
         self.first_rq = None
         self.call_stats = defaultdict(int)
@@ -491,7 +494,7 @@ class RunningConditionalQuantile:
         if state is not None:
             self.set_state_dict(state)
             return
-        self.rq_args = dict(resolution=resolution, buffersize=buffersize,
+        self.rq_args = dict(r=r, buffersize=buffersize,
                 seed=seed)
 
     def add(self, condition, incoming):
@@ -1011,7 +1014,7 @@ if __name__ == '__main__':
         dtype = torch.float
         device = None
     starttime = time.time()
-    qc = RunningQuantile(resolution=6 * 1024)
+    qc = RunningQuantile(r=3 * 1024)
     qc.add(alldata)
     # Test state dict
     saved = qc.state_dict()

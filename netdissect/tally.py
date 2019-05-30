@@ -1,8 +1,96 @@
+'''
+Batchwise tally functions, analogous to tensor.topk, mean+variance,
+bincount, covaraince, and sort (for quantiles), implemented in a way
+that permits fast computation of statistics over large data sets that
+do not fit in memory at once.
+
+These functions are useful because, while many statistics are much
+cheaper to compute on the GPU than on the CPU, they may require too
+much memory to compute all at once.  Instead the statistics need
+to be computed in a running fashion, one batch at a time, and
+accumulated in a way that economizes GPU memory.
+
+Use the tally functions by passing a batch computation function and
+an underlying dataset.  A DataLoader will be created, and then the
+function will be called to compute samples of data to tally.
+
+Underlying running statistics algorithms are implemented in the
+runningstats package.
+'''
 import torch
 from netdissect import sampler, runningstats, pbar
+import warnings
+
+def tally_topk(compute, dataset, sample_size=None, batch_size=10, k=100,
+        **kwargs):
+    '''
+    Computes the topk statistics for a large data sample that can be
+    computed from a dataset.  The compute function should return one
+    batch of samples as a (sample, unit)-dimension tensor.
+
+    k specifies the number of top samples to retain.
+    Results are returned as a RunningTopK object.
+    '''
+    with torch.no_grad():
+        loader = make_loader(dataset, sample_size, batch_size, **kwargs)
+        rtk = runningstats.RunningTopK(k=k)
+        for batch in pbar(loader):
+            sample = call_compute(compute, batch)
+            rtk.add(sample)
+        rtk.to_('cpu')
+        return rtk
+
+def tally_quantile(compute, dataset, sample_size=None, batch_size=10,
+        r=4096, **kwargs):
+    '''
+    Computes quantile sketch statistics for a large data sample that can
+    be computed from a dataset.  The compute function should return one
+    batch of samples as a (sample, unit)-dimension tensor.
+
+    The underlying quantile sketch is an optimal KLL sorted sampler that
+    retains at least r samples (where r is the specified resolution).
+    '''
+    with torch.no_grad():
+        loader = make_loader(dataset, sample_size, batch_size, **kwargs)
+        rq = runningstats.RunningQuantile()
+        for batch in pbar(loader):
+            sample = call_compute(compute, batch)
+            rq.add(sample)
+        rq.to_('cpu')
+        return rq
+
+def tally_conditional_quantile(compute, dataset,
+        sample_size=None, batch_size=1, gpu_cache=64, r=1024,
+        **kwargs):
+    '''
+    Computes conditional quantile sketches for a large data sample that
+    can be computed from a dataset.  The compute function should return a
+    sequence of sample batch tuples (condition, (sample, unit)-tensor),
+    one for each condition relevant to the batch.
+    '''
+    with torch.no_grad():
+        loader = make_loader(dataset, sample_size, batch_size, **kwargs)
+        cq = runningstats.RunningConditionalQuantile(r=r)
+        most_common_conditions = set()
+        for i, batch in enumerate(pbar(loader)):
+            sample_set = call_compute(compute, batch)
+            for cond, sample in sample_set:
+                # Move uncommon conditional data to the cpu before collating.
+                if cond not in most_common_conditions:
+                    sample = sample.cpu()
+                cq.add(cond, sample)
+            # Move uncommon conditions off the GPU.
+            if i and not i & (i - 1):  # if i is a power of 2:
+                common_conditions = set(cq.most_common_conditions(gpu_cache))
+                cq.to_('cpu', [k for k in cq.keys()
+                        if k not in common_conditions])
+        # At the end, move all to the CPU
+        cq.to_('cpu')
+        return cq
 
 def conditional_samples(activations, segments):
     '''
+    Helper function when defining generators for *_conditional tallies.
     Transforms a batch of activations and segmentations into a
     sequence of conditional statistics, i.e., activations that
     are at the same location as the segmentation label.
@@ -32,68 +120,7 @@ def conditional_samples(activations, segments):
                     activations_by_channel[mask].view(-1, channels))
     return sample_generator()
 
-def tally_topk(compute, dataset, sample_size=None, batch_size=10, k=100,
-        **kwargs):
-    '''
-    Computes the topk statistics for a large data sample that can be
-    computed from a dataset.  The compute function should return one
-    batch of samples as a (sample, unit)-dimension tensor.
-    '''
-    with torch.no_grad():
-        loader = make_loader(dataset, sample_size, batch_size, **kwargs)
-        rtk = runningstats.RunningTopK(k=k)
-        for batch in pbar(loader):
-            sample = call_compute(compute, batch)
-            rtk.add(sample)
-        rtk.to_('cpu')
-        return rtk
-
-def tally_quantile(compute, dataset, sample_size=None, batch_size=10,
-        resolution=2048, **kwargs):
-    '''
-    Computes quantile sketch statistics for a large data sample that can
-    be computed from a dataset.  The compute function should return one
-    batch of samples as a (sample, unit)-dimension tensor.
-    '''
-    with torch.no_grad():
-        loader = make_loader(dataset, sample_size, batch_size, **kwargs)
-        rq = runningstats.RunningQuantile()
-        for batch in pbar(loader):
-            sample = call_compute(compute, batch)
-            rq.add(sample)
-        rq.to_('cpu')
-        return rq
-
-def tally_conditional_quantile(compute, dataset,
-        sample_size=None, batch_size=1, gpu_cache=64, resolution=2048,
-        **kwargs):
-    '''
-    Computes conditional quantile sketches for a large data sample that
-    can be computed from a dataset.  The compute function should return a
-    sequence of sample batch tuples (condition, (sample, unit)-tensor),
-    one for each condition relevant to the batch.
-    '''
-    with torch.no_grad():
-        loader = make_loader(dataset, sample_size, batch_size, **kwargs)
-        cq = runningstats.RunningConditionalQuantile(resolution=resolution)
-        most_common_conditions = set()
-        for i, batch in enumerate(pbar(loader)):
-            sample_set = call_compute(compute, batch)
-            for cond, sample in sample_set:
-                # Move uncommon conditional data to the cpu before collating.
-                if cond not in most_common_conditions:
-                    sample = sample.cpu()
-                cq.add(cond, sample)
-            # Move uncommon conditions off the GPU.
-            if i and not i & (i - 1):  # if i is a power of 2:
-                common_conditions = set(cq.most_common_conditions(gpu_cache))
-                cq.to_('cpu', [k for k in cq.keys()
-                        if k not in common_conditions])
-        # At the end, move all to the CPU
-        cq.to_('cpu')
-        return cq
-
-def tally_variance(compute, dataset, sample_size=None, batch_size=10, **kwargs):
+def tally_mean(compute, dataset, sample_size=None, batch_size=10, **kwargs):
     '''
     Computes unitwise mean and variance stats for a large data sample that
     can be computed from a dataset.  The compute function should return one
@@ -108,7 +135,7 @@ def tally_variance(compute, dataset, sample_size=None, batch_size=10, **kwargs):
         rv.to_('cpu')
         return rv
 
-def tally_conditional_variance(compute, dataset,
+def tally_conditional_mean(compute, dataset,
         sample_size=None, batch_size=1, **kwargs):
     '''
     Computes conditional mean and variance for a large data sample that
@@ -164,23 +191,103 @@ def tally_cat(compute, dataset, sample_size=None, batch_size=10,
             result.append(call_compute(compute, batch).cpu())
         return torch.cat(result)
 
-def iou_from_conditional_quantile(condq, cutoff=0.95):
+def iou_from_conditional_quantile(condq, cutoff=0.95, min_batches=2):
     '''
     Given a RunningConditionalQuantile, estimates all-pairs
     IoU statistics for all units and conditions at the specified
-    quantile cutoff.
+    quantile cutoff.  Note that cutoff can be a list of cutoffs.
+    The result is a tensor of dimension (units, conditions, cutoffs)
+    containing IoU estimates for each combination.
+
+    Conditions that are sampled in fewer than min_batches are given IoU 0.
     '''
+    return intersection_from_conditional_quantile(condq,
+            statistic=intersection_over_union,
+            cutoff=cutoff, min_batches=min_batches)
+
+def iqr_from_conditional_quantile(condq, cutoff=0.95, min_batches=2):
+    '''
+    Given a RunningConditionalQuantile, estimates all-pairs
+    IQR statistics for all units and conditions at the specified
+    quantile cutoff.  Similar to iou_from_conditional_quantile.
+    '''
+    return intersection_from_conditional_quantile(condq,
+            statistic=information_quality_ratio,
+            cutoff=cutoff, min_batches=min_batches)
+
+def mi_from_conditional_quantile(condq, cutoff=0.95, min_batches=2):
+    '''
+    Given a RunningConditionalQuantile, estimates all-pairs
+    mutual information for all units and conditions at the specified
+    quantile cutoff.  Similar to iou_from_conditional_quantile.
+    '''
+    return intersection_from_conditional_quantile(condq,
+            statistic=mutual_information,
+            cutoff=cutoff, min_batches=min_batches)
+
+def intersection_from_conditional_quantile(
+        condq, statistic=lambda x: x[0,0], cutoff=0.95, min_batches=2):
+    '''
+    There are a variety of ways of scoring the intersection between a
+    prediction (a) and a true variable (b) that are all expressions of
+    [[p(a&b), p(a&!b)], [p(!a&b), p(!a&!b)]].  This computes any of
+    them by passing the above array to a 'statistic' function.
+    By default it returns p(a&b).
+    '''
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', UserWarning)
+        cutoff = torch.tensor(cutoff)
     uncond_size = condq.conditional(0).size()
     units = condq.conditional(0).depth
-    iouscores = torch.zeros((units, max(condq.keys()) + 1))
-    actlevel = condq.conditional(0).quantiles([cutoff])[:,0]
-    for c in sorted(condq.keys()):
-        if c == 0 or condq.conditional(c).batchcount <= 1:
+    scores = torch.zeros((units, max(condq.keys()) + 1) + cutoff.shape)
+    # math: actlevel = level such that p(x > level) = cutoff
+    actlevel = condq.conditional(0).quantiles(cutoff)
+    prog = pbar if cutoff.numel() > 20 else lambda x: x
+    for c in prog(sorted(condq.keys())):
+        rq = condq.conditional(c)
+        if c == 0 or rq.batchcount < min_batches:
             continue
-        levelp = condq.conditional(c).normalize(actlevel)
-        cp = float(condq.conditional(c).size()) / uncond_size
-        iouscores[:,c] = cp * (1 - levelp) / (1 - cutoff + cp * levelp)
-    return iouscores
+        # math: condp = p(x > actlevel | cond)
+        condp = rq.normalize(actlevel)
+        truth = float(rq.size()) / uncond_size
+        isect = truth * (1 - condp)
+        pred = (1 - cutoff)
+        union = pred + truth - isect
+        # Compute relative mutual information directly.
+        arr = torch.stack([
+            isect,         pred - isect,
+            truth - isect, 1 - union]).view((2, 2) + isect.shape)
+        scores[:,c,...] = statistic(arr)
+    return scores
+
+def intersection_over_union(arr):
+    return arr[0,0] / (1 - arr[1,1])
+
+def mutual_information(arr):
+    total = 0
+    for j in range(arr.shape[0]):
+        for k in range(arr.shape[1]):
+            joint = arr[j,k]
+            ind = arr[j,:].sum(dim=0) * arr[:,k].sum(dim=0)
+            term = joint * (joint / ind).log()
+            term[torch.isnan(term)] = 0
+            total += term
+    return total.clamp_(0)
+
+def joint_entropy(arr):
+    total = 0
+    for j in range(arr.shape[0]):
+        for k in range(arr.shape[1]):
+            joint = arr[j,k]
+            term = joint * joint.log()
+            term[torch.isnan(term)] = 0
+            total += term
+    return (-total).clamp_(0)
+
+def information_quality_ratio(arr):
+    iqr = mutual_information(arr) / joint_entropy(arr)
+    iqr[torch.isnan(iqr)] = 0
+    return iqr
 
 def call_compute(compute, batch):
     '''Utility for passing a dataloader batch to a compute function.'''

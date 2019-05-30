@@ -274,7 +274,7 @@ def compute_feature_quantiles(args, corpus, cache_filename, model, full_sample):
     if all(k in corpus for k in ['feature_99', 'feature_999']):
         return
     with torch.no_grad():
-        rq = RunningQuantile(resolution=10000) # 10x what's needed.
+        rq = RunningQuantile(r=5000) # 10x what's needed.
         for [zbatch] in pbar(
                 torch.utils.data.DataLoader(TensorDataset(full_sample),
                 batch_size=args.inference_batch_size, num_workers=10,

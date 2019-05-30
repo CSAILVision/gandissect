@@ -696,7 +696,7 @@ def score_tally_stats(label_category, tc, truth, cc, ic):
     return iou, iqr
 
 def collect_quantiles_and_topk(outdir, model, segloader,
-        segrunner, whiten=(lambda x: x), k=100, resolution=1024):
+        segrunner, whiten=(lambda x: x), k=100, r=512):
     '''
     Collects (estimated) quantile information and (exact) sorted top-K lists
     for every channel in the retained layers of the model.  Returns
@@ -736,7 +736,7 @@ def collect_quantiles_and_topk(outdir, model, segloader,
                 if topks.get(key, None) is None:
                     topks[key] = RunningTopK(k)
                 if quantiles.get(key, None) is None:
-                    quantiles[key] = RunningQuantile(resolution=resolution)
+                    quantiles[key] = RunningQuantile(r=r)
                 topvalue = value
                 if len(value.shape) > 2:
                     topvalue, _ = value.view(*(value.shape[:2] + (-1,))).max(2)
@@ -972,7 +972,7 @@ def collect_cond_quantiles(outdir, model, segloader, segrunner,
                         dtype=value.dtype, device=value.device)
             if layer not in conditional_quantiles:
                 conditional_quantiles[layer] = RunningConditionalQuantile(
-                        resolution=2048)
+                        r=1024)
             upsampled = torch.nn.functional.grid_sample(value,
                     upsample_grids[layer], padding_mode='border').view(
                             value.shape[1], -1)
