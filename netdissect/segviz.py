@@ -37,7 +37,10 @@ def segment_visualization(seg, size=None):
         result[bitmap] = high_contrast_arr[label % len(high_contrast_arr)]
     result = result.reshape((seg.shape[1], seg.shape[2], 3))
     if size is not None:
-        result = scipy.misc.imresize(result, size, interp='nearest')
+        if not hasattr(size, '__len__'):
+            size = (size, size)
+        zoom_ratio = [t / s for t, s in zip(size, result.shape[:2])] + [1]
+        result = scipy.ndimage.zoom(result, zoom_ratio, order=0)
     return result
 
 # A palette that maximizes perceptual contrast between entries.
