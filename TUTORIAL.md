@@ -56,3 +56,8 @@ Open a browser in your local machine and use the corresponding URL
 ```
 http://localhost:6007/?token=[token_id]
 ```
+
+## Slides
+
+Slides to introduce the tutorial are here:
+http://gandissect.csail.mit.edu/slides/ganocracy-dissect-tutorial.pptx
