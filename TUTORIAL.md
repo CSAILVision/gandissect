@@ -54,5 +54,5 @@ Open a browser in your local machine and use the corresponding URL
 (make sure you specify the correct port):
 
 ```
-http://localhost:7000/?token=[token_id]
+http://localhost:6007/?token=[token_id]
 ```
