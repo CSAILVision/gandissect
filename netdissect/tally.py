@@ -299,7 +299,7 @@ def call_compute(compute, batch):
     else:
         return compute(batch)
 
-def make_loader(dataset, sample_size=None, batch_size=10, *kwargs):
+def make_loader(dataset, sample_size=None, batch_size=10, **kwargs):
     '''Utility for creating a dataloader on fixed sample subset.'''
     if isinstance(dataset, torch.Tensor):
         dataset = torch.utils.data.TensorDataset(dataset)
@@ -308,4 +308,4 @@ def make_loader(dataset, sample_size=None, batch_size=10, *kwargs):
             sampler=sampler.FixedSubsetSampler(
                     list(range(sample_size))) if sample_size else None,
             batch_size=batch_size,
-            *kwargs)
+            **kwargs)
