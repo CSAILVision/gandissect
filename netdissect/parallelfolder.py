@@ -31,13 +31,16 @@ class ParallelImageFolders(data.Dataset):
             transform=None,
             loader=default_loader,
             stacker=None,
+            classification=False,
             intersection=False,
             verbose=None,
             size=None,
             shuffle=None):
         self.image_roots = image_roots
-        self.images = make_parallel_dataset(image_roots,
-                intersection=intersection, verbose=verbose)
+        self.images, self.classes, self.class_to_idx = (
+                make_parallel_dataset(image_roots,
+                    classification=classification,
+                    intersection=intersection, verbose=verbose))
         if len(self.images) == 0:
             raise RuntimeError("Found 0 images within: %s" % image_roots)
         if shuffle is not None:
@@ -52,6 +55,9 @@ class ParallelImageFolders(data.Dataset):
 
     def __getitem__(self, index):
         paths = self.images[index]
+        if self.classes is not None:
+            classidx = paths[-1]
+            paths = paths[:-1]
         sources = [self.loader(path) for path in paths]
         # Add a common shared state dict to allow random crops/flips to be
         # coordinated.
@@ -63,7 +69,11 @@ class ParallelImageFolders(data.Dataset):
                     for source, transform in zip(sources, self.transforms)]
         if self.stacker is not None:
             sources = self.stacker(sources)
+            if self.classes is not None:
+                sources = (sources, classidx)
         else:
+            if self.classes is not None:
+                sources.append(classidx)
             sources = tuple(sources)
         return sources
 
@@ -92,9 +102,11 @@ def walk_image_files(rootdir, verbose=None):
                 result.append(os.path.join(dirname, fname))
     return result
 
-def make_parallel_dataset(image_roots, intersection=False, verbose=None):
+def make_parallel_dataset(image_roots, classification=False,
+        intersection=False, verbose=None):
     """
-    Returns [(img1, img2), (img1, img2)..]
+    Returns ([(img1, img2, clsid), (img1, img2, clsid)..],
+             classes, class_to_idx)
     """
     image_roots = [os.path.expanduser(d) for d in image_roots]
     image_sets = OrderedDict()
@@ -107,13 +119,21 @@ def make_parallel_dataset(image_roots, intersection=False, verbose=None):
                 raise RuntimeError(
                     'Images not parallel: %s missing from one dir' % (key))
             image_sets[key].append(path)
+    if classification:
+        classes = sorted(set([os.path.basename(os.path.dirname(k))
+            for k in image_sets.keys()]))
+        class_to_idx = dict({k: v for v, k in enumerate(classes)})
+        for k, v in image_sets.items():
+            v.append(class_to_idx[os.path.basename(os.path.dirname(k))])
+    else:
+        classes, class_to_idx = None, None
     tuples = []
     for key, value in image_sets.items():
-        if len(value) != len(image_roots):
+        if len(value) != len(image_roots) + 1 if classification else 0:
             if intersection:
                 continue
             else:
                 raise RuntimeError(
                     'Images not parallel: %s missing from one dir' % (key))
         tuples.append(tuple(value))
-    return tuples
+    return tuples, classes, class_to_idx
