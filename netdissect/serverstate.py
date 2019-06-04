@@ -371,7 +371,7 @@ class GanTester:
 def load_quantile_if_present(outdir, filename, device):
     filepath = os.path.join(outdir, filename)
     if os.path.isfile(filepath):
-        data = numpy.load(filepath)
+        data = numpy.load(filepath, allow_pickle=True)
         result = RunningQuantile(state=data)
         result.to_(device)
         return result

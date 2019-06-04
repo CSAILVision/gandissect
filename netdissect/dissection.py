@@ -787,7 +787,7 @@ def collect_bincounts(outdir, model, segloader, levels, segrunner,
     for layer in model.retained_features():
         filename = os.path.join(outdir, safe_dir_name(layer), 'bincounts.npz')
         if os.path.isfile(filename):
-            data = numpy.load(filename)
+            data = numpy.load(filename, allow_pickle=True)
             iou_scores[layer] = torch.from_numpy(data['iou_scores'])
             iqr_scores[layer] = torch.from_numpy(data['iqr_scores'])
             total_counts = torch.from_numpy(data['total_counts'])
@@ -1076,7 +1076,7 @@ def collect_iqr(outdir, model, segloader, segrunner, whiten=(lambda x: x)):
     for layer in model.retained_features():
         filename = os.path.join(outdir, safe_dir_name(layer), 'iqr.npz')
         if os.path.isfile(filename):
-            data = numpy.load(filename)
+            data = numpy.load(filename, allow_pickle=True)
             max_iqr[layer] = torch.from_numpy(data['max_iqr'])
             max_iqr_level[layer] = torch.from_numpy(data['max_iqr_level'])
             max_iqr_quantile[layer] = torch.from_numpy(data['max_iqr_quantile'])
@@ -1370,14 +1370,14 @@ def multilabel_onehot(labels, num_labels, dtype=None, ignore_index=None):
 def load_npy_if_present(outdir, filename, device):
     filepath = os.path.join(outdir, filename)
     if os.path.isfile(filepath):
-        data = numpy.load(filepath)
+        data = numpy.load(filepath, allow_pickle=True)
         return torch.from_numpy(data).to(device)
     return 0
 
 def load_npz_if_present(outdir, filename, varnames, device):
     filepath = os.path.join(outdir, filename)
     if os.path.isfile(filepath):
-        data = numpy.load(filepath)
+        data = numpy.load(filepath, allow_pickle=True)
         numpy_result = [data[n] for n in varnames]
         return tuple(torch.from_numpy(data).to(device) for data in numpy_result)
     return None
@@ -1385,7 +1385,7 @@ def load_npz_if_present(outdir, filename, varnames, device):
 def load_quantile_if_present(outdir, filename, device):
     filepath = os.path.join(outdir, filename)
     if os.path.isfile(filepath):
-        data = numpy.load(filepath)
+        data = numpy.load(filepath, allow_pickle=True)
         result = RunningQuantile(state=data)
         result.to_(device)
         return result
@@ -1394,7 +1394,7 @@ def load_quantile_if_present(outdir, filename, device):
 def load_conditional_quantile_if_present(outdir, filename):
     filepath = os.path.join(outdir, filename)
     if os.path.isfile(filepath):
-        data = numpy.load(filepath)
+        data = numpy.load(filepath, allow_pickle=True)
         result = RunningConditionalQuantile(state=data)
         return result
     return None
@@ -1402,7 +1402,7 @@ def load_conditional_quantile_if_present(outdir, filename):
 def load_topk_if_present(outdir, filename, device):
     filepath = os.path.join(outdir, filename)
     if os.path.isfile(filepath):
-        data = numpy.load(filepath)
+        data = numpy.load(filepath, allow_pickle=True)
         result = RunningTopK(state=data)
         result.to_(device)
         return result
@@ -1411,7 +1411,7 @@ def load_topk_if_present(outdir, filename, device):
 def load_covariance_if_present(outdir, filename, device):
     filepath = os.path.join(outdir, filename)
     if os.path.isfile(filepath):
-        data = numpy.load(filepath)
+        data = numpy.load(filepath, allow_pickle=True)
         result = RunningCrossCovariance(state=data)
         result.to_(device)
         return result
