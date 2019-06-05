@@ -17,7 +17,7 @@ function will be called to compute samples of data to tally.
 Underlying running statistics algorithms are implemented in the
 runningstats package.
 '''
-import torch, numpy
+import torch, numpy, os
 from netdissect import sampler, runningstats, pbar
 import warnings
 
@@ -157,7 +157,7 @@ def tally_mean(compute, dataset, sample_size=None, batch_size=10,
         return rv
 
 def tally_conditional_mean(compute, dataset,
-        sample_size=None, batch_size=1, **kwargs):
+        sample_size=None, batch_size=1, cachefile=None, **kwargs):
     '''
     Computes conditional mean and variance for a large data sample that
     can be computed from a dataset.  The compute function should return a
@@ -182,7 +182,7 @@ def tally_conditional_mean(compute, dataset,
         return cv
 
 def tally_bincount(compute, dataset, sample_size=None, batch_size=10,
-        multi_label_axis=None, **kwargs):
+        multi_label_axis=None, cachefile=None, **kwargs):
     '''
     Computes bincount totals for a large data sample that can be
     computed from a dataset.  The compute function should return one
@@ -367,6 +367,8 @@ def make_loader(dataset, sample_size=None, batch_size=10, **kwargs):
     '''Utility for creating a dataloader on fixed sample subset.'''
     if isinstance(dataset, torch.Tensor):
         dataset = torch.utils.data.TensorDataset(dataset)
+    if sample_size is not None:
+        assert sample_size <= len(dataset)
     return torch.utils.data.DataLoader(
             dataset,
             sampler=sampler.FixedSubsetSampler(
@@ -381,7 +383,8 @@ def load_cached_state(cachefile, args):
         dat = numpy.load(cachefile, allow_pickle=True)
         for a, v in args.items():
             if a not in dat or dat[a] != v:
-                pbar.print('%s changed from %s to %s' % (a, dat[a], v))
+                pbar.print('%s %s changed from %s to %s' % (
+                    cachefile, a, dat[a], v))
                 return None
     except:
         return None
