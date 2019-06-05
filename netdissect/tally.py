@@ -17,12 +17,12 @@ function will be called to compute samples of data to tally.
 Underlying running statistics algorithms are implemented in the
 runningstats package.
 '''
-import torch
+import torch, numpy
 from netdissect import sampler, runningstats, pbar
 import warnings
 
 def tally_topk(compute, dataset, sample_size=None, batch_size=10, k=100,
-        **kwargs):
+        cachefile=None, **kwargs):
     '''
     Computes the topk statistics for a large data sample that can be
     computed from a dataset.  The compute function should return one
@@ -32,16 +32,21 @@ def tally_topk(compute, dataset, sample_size=None, batch_size=10, k=100,
     Results are returned as a RunningTopK object.
     '''
     with torch.no_grad():
-        loader = make_loader(dataset, sample_size, batch_size, **kwargs)
+        args = dict(sample_size=sample_size, k=k)
+        cached_state = load_cached_state(cachefile, args)
+        if cached_state is not None:
+            return runningstats.RunningTopK(state=cached_state)
         rtk = runningstats.RunningTopK(k=k)
+        loader = make_loader(dataset, sample_size, batch_size, **kwargs)
         for batch in pbar(loader):
             sample = call_compute(compute, batch)
             rtk.add(sample)
         rtk.to_('cpu')
+        save_cached_state(cachefile, rtk, args)
         return rtk
 
 def tally_quantile(compute, dataset, sample_size=None, batch_size=10,
-        r=4096, **kwargs):
+        r=4096, cachefile=None, **kwargs):
     '''
     Computes quantile sketch statistics for a large data sample that can
     be computed from a dataset.  The compute function should return one
@@ -51,17 +56,22 @@ def tally_quantile(compute, dataset, sample_size=None, batch_size=10,
     retains at least r samples (where r is the specified resolution).
     '''
     with torch.no_grad():
+        args = dict(sample_size=sample_size, r=r)
+        cached_state = load_cached_state(cachefile, args)
+        if cached_state is not None:
+            return runningstats.RunningQuantile(state=cached_state)
         loader = make_loader(dataset, sample_size, batch_size, **kwargs)
         rq = runningstats.RunningQuantile()
         for batch in pbar(loader):
             sample = call_compute(compute, batch)
             rq.add(sample)
         rq.to_('cpu')
+        save_cached_state(cachefile, rq, args)
         return rq
 
 def tally_conditional_quantile(compute, dataset,
         sample_size=None, batch_size=1, gpu_cache=64, r=1024,
-        **kwargs):
+        cachefile=None, **kwargs):
     '''
     Computes conditional quantile sketches for a large data sample that
     can be computed from a dataset.  The compute function should return a
@@ -69,6 +79,10 @@ def tally_conditional_quantile(compute, dataset,
     one for each condition relevant to the batch.
     '''
     with torch.no_grad():
+        args = dict(sample_size=sample_size, r=r)
+        cached_state = load_cached_state(cachefile, args)
+        if cached_state is not None:
+            return runningstats.RunningConditionalQuantile(state=cached_state)
         loader = make_loader(dataset, sample_size, batch_size, **kwargs)
         cq = runningstats.RunningConditionalQuantile(r=r)
         most_common_conditions = set()
@@ -86,6 +100,7 @@ def tally_conditional_quantile(compute, dataset,
                         if k not in common_conditions])
         # At the end, move all to the CPU
         cq.to_('cpu')
+        save_cached_state(cachefile, cq, args)
         return cq
 
 def conditional_samples(activations, segments):
@@ -120,19 +135,25 @@ def conditional_samples(activations, segments):
                     activations_by_channel[mask].view(-1, channels))
     return sample_generator()
 
-def tally_mean(compute, dataset, sample_size=None, batch_size=10, **kwargs):
+def tally_mean(compute, dataset, sample_size=None, batch_size=10,
+        cachefile=None, **kwargs):
     '''
     Computes unitwise mean and variance stats for a large data sample that
     can be computed from a dataset.  The compute function should return one
     batch of samples as a (sample, unit)-dimension tensor.
     '''
     with torch.no_grad():
+        args = dict(sample_size=sample_size)
+        cached_state = load_cached_state(cachefile, args)
+        if cached_state is not None:
+            return runningstats.RunningVariance(state=cached_state)
         loader = make_loader(dataset, sample_size, batch_size, **kwargs)
         rv = runningstats.RunningVariance()
         for batch in pbar(loader):
             sample = call_compute(compute, batch)
             rv.add(sample)
         rv.to_('cpu')
+        save_cached_state(cachefile, rv, args)
         return rv
 
 def tally_conditional_mean(compute, dataset,
@@ -144,6 +165,10 @@ def tally_conditional_mean(compute, dataset,
     one for each condition relevant to the batch.
     '''
     with torch.no_grad():
+        args = dict(sample_size=sample_size)
+        cached_state = load_cached_state(cachefile, args)
+        if cached_state is not None:
+            return runningstats.RunningConditionalVariance(state=cached_state)
         loader = make_loader(dataset, sample_size, batch_size, **kwargs)
         cv = runningstats.RunningConditionalVariance()
         for i, batch in enumerate(pbar(loader)):
@@ -153,6 +178,7 @@ def tally_conditional_mean(compute, dataset,
                 cv.add(cond, sample)
         # At the end, move all to the CPU
         cv.to_('cpu')
+        save_cached_state(cachefile, cv, args)
         return cv
 
 def tally_bincount(compute, dataset, sample_size=None, batch_size=10,
@@ -163,6 +189,10 @@ def tally_bincount(compute, dataset, sample_size=None, batch_size=10,
     batch of samples as a (sample, unit)-dimension tensor.
     '''
     with torch.no_grad():
+        args = dict(sample_size=sample_size)
+        cached_state = load_cached_state(cachefile, args)
+        if cached_state is not None:
+            return runningstats.RunningBincount(state=cached_state)
         loader = make_loader(dataset, sample_size, batch_size, **kwargs)
         rbc = runningstats.RunningBincount()
         for batch in pbar(loader):
@@ -174,6 +204,7 @@ def tally_bincount(compute, dataset, sample_size=None, batch_size=10,
                 size = None
             rbc.add(sample, size=size)
         rbc.to_('cpu')
+        save_cached_state(cachefile, rbc, args)
         return rbc
 
 def tally_cat(compute, dataset, sample_size=None, batch_size=10,
@@ -190,6 +221,39 @@ def tally_cat(compute, dataset, sample_size=None, batch_size=10,
         for batch in pbar(loader):
             result.append(call_compute(compute, batch).cpu())
         return torch.cat(result)
+
+def iou_from_conditional_indicator_mean(condmv, cutoff=0.99, min_batches=2):
+    '''
+    Given a RunningConditionalVariance containing mean values of
+    indictors, estimates all-pairs IoU statistics for all units
+    between the conditions and the indicators.
+    The result is a tensor of dimension (units, conditions)
+    containing IoU estimates for each combination.
+
+    Conditions that are sampled in fewer than min_batches are given IoU 0.
+    '''
+    uncond_size = condmv.conditional(0).size()
+    units = condmv.conditional(0).depth
+    scores = torch.zeros((units, max(condmv.keys()) + 1))
+    # math: actlevel = level such that p(x > level) = cutoff
+    actlevel = condq.conditional(0).quantiles(cutoff)
+    # use a progress bar if it's going to be more than a few seconds.
+    prog = pbar if scores.numel() > 1e8 else lambda x: x
+    for c in prog(sorted(condmv.keys())):
+        rmv = condmv.conditional(c)
+        if c == 0 or rmv.batchcount < min_batches:
+            continue
+        # math: condp = p(x > actlevel | cond)
+        condp = rmv.mean()
+        truth = float(rmv.size()) / uncond_size
+        isect = truth * (1 - condp)
+        pred = (1 - cutoff)
+        union = pred + truth - isect
+        # Compute relative mutual information directly.
+        arr = torch.stack([
+            isect,         pred - isect,
+            truth - isect, 1 - union]).view((2, 2) + isect.shape)
+        scores[:,c,...] = intersection_over_union(arr)
 
 def iou_from_conditional_quantile(condq, cutoff=0.95, min_batches=2):
     '''
@@ -309,3 +373,28 @@ def make_loader(dataset, sample_size=None, batch_size=10, **kwargs):
                     list(range(sample_size))) if sample_size else None,
             batch_size=batch_size,
             **kwargs)
+
+def load_cached_state(cachefile, args):
+    if cachefile is None:
+        return None
+    try:
+        dat = numpy.load(cachefile, allow_pickle=True)
+        for a, v in args.items():
+            if a not in dat or dat[a] != v:
+                pbar.print('%s changed from %s to %s' % (a, dat[a], v))
+                return None
+    except:
+        return None
+    else:
+        pbar.print('Loading cached %s' % cachefile)
+        return dat
+
+def save_cached_state(cachefile, obj, args):
+    if cachefile is None:
+        return
+    dat = obj.state_dict()
+    for a, v in args.items():
+        if a in dat:
+            assert(dat[a] == v)
+        dat[a] = v
+    numpy.savez(cachefile, **dat)
