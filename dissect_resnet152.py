@@ -3,6 +3,7 @@ import torch.hub
 from netdissect import oldresnet152
 from netdissect import nethook
 from netdissect import upsample
+from netdissect import pbar
 import torch, os
 
 torch.backends.cudnn.benchmark = True
@@ -23,7 +24,7 @@ except:
 model.load_state_dict(sd)
 
 layername = '7'
-sample_size = 50000
+sample_size = 36500
 
 model = nethook.InstrumentedModel(model)
 model = model.cuda()
@@ -80,6 +81,7 @@ def compute_samples(batch, *args):
     hacts = upfn(acts)
     return hacts.permute(0, 2, 3, 1).contiguous().view(-1, acts.shape[1])
 
+pbar.descnext('rq')
 rq = tally.tally_quantile(compute_samples, dataset, sample_size=sample_size,
         r=8192, cachefile=resfile('rq.npz'))
 
@@ -92,22 +94,22 @@ if False:
         hacts = upfn(acts)
         return tally.conditional_samples(hacts, seg)
 
+    pbar.descnext('condq')
     condq = tally.tally_conditional_quantile(compute_conditional_samples,
             dataset, sample_size=sample_size, cachefile=resfile('condq.npz'))
 
-level_at_99 = rq.quantiles(0.99)
+level_at_99 = rq.quantiles(0.99).cuda()[None,:,None,None]
 
 def compute_conditional_indicator(batch, *args):
     image_batch = batch.cuda()
+    seg = segmodel.segment_batch(renorm(image_batch), downsample=4)
     _ = model(image_batch)
     acts = model.retained_layer(layername)
-    seg = segmodel.segment_batch(renorm(image_batch), downsample=4)
     hacts = upfn(acts)
     iacts = (hacts > level_at_99).float() # indicator where > 0.99 percentile.
     return tally.conditional_samples(iacts, seg)
 
-condi99 = tally.tally_conditional_quantile(compute_conditional_indicator,
+pbar.descnext('condi99')
+condi99 = tally.tally_conditional_mean(compute_conditional_indicator,
         dataset, sample_size=sample_size, cachefile=resfile('condi99.npz'))
-
-
 
