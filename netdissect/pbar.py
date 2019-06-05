@@ -11,6 +11,7 @@ except:
     tqdm = None
 
 default_verbosity = True
+next_description = None
 
 def verbose(verbose):
     '''
@@ -21,7 +22,7 @@ def verbose(verbose):
 
 def post(**kwargs):
     '''
-    When within a progress loop, post_progress(k=str) will display
+    When within a progress loop, pbar.post(k=str) will display
     the given k=str status on the right-hand-side of the progress
     status bar.  If not within a visible progress bar, does nothing.
     '''
@@ -31,12 +32,22 @@ def post(**kwargs):
 
 def desc(desc):
     '''
-    When within a progress loop, desc_progress(str) changes the
+    When within a progress loop, pbar.desc(str) changes the
     left-hand-side description of the loop toe the given description.
     '''
     innermost = innermost_tqdm()
     if innermost:
         innermost.set_description(str(desc))
+
+def descnext(desc):
+    '''
+    Called before starting a progress loop, pbar.descnext(str)
+    sets the description text that will be used in the following loop.
+    '''
+    global next_description
+    if not default_verbosity or tqdm is None:
+        return
+    next_description = desc
 
 def print(*args):
     '''
@@ -86,20 +97,23 @@ def __call__(x, *args, **kwargs):
     Invokes a progress function that can wrap iterators to print
     progress messages, if verbose is True.
    
-    If verbose is False or if iftop is True and there is already
-    a top-level tqdm loop being reported, then a quiet non-printing
-    identity function is used.
+    If verbose is False or tqdm is unavailable, then a quiet
+    non-printing identity function is used.
 
     verbose can also be set to a spefific progress function rather
     than True, and that function will be used.
     '''
-    global default_verbosity
+    global default_verbosity, next_description
     if not default_verbosity or tqdm is None:
         return x
     if default_verbosity == True:
         fn = tqdm_notebook if in_notebook() else tqdm_terminal
     else:
         fn = default_verbosity
+    if next_description is not None:
+        kwargs = dict(kwargs)
+        kwargs['desc'] = next_description
+        next_description = None
     return fn(x, *args, **kwargs)
 
 class CallableModule(types.ModuleType):
